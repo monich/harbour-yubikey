@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=YubiKey OTP
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-yubikey
+Exec=harbour-yubikey
+
+[X-Sailjail]
+Sandboxing=Disabled
+
+[X-HarbourBackup]
+BackupPathList=.local/share/harbour-yubikey
+BackupConfigList=/apps/harbour-foilauth/

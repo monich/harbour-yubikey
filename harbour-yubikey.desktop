@@ -10,4 +10,4 @@ Sandboxing=Disabled
 
 [X-HarbourBackup]
 BackupPathList=.local/share/harbour-yubikey
-BackupConfigList=/apps/harbour-foilauth/
+BackupConfigList=/apps/harbour-yubikey/

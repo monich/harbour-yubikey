@@ -61,7 +61,7 @@ class YubiKeyRecognizer::Handler:
     public QDBusAbstractAdaptor
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "harbour.yubikey")
+    Q_CLASSINFO("D-Bus Interface", "harbour.yubikey.NDEF")
     Q_CLASSINFO("D-Bus Introspection",
 "  <interface name=\"harbour.yubikey.NDEF\">\n"
 "    <method name=\"HandleURI\">\n"
@@ -112,7 +112,7 @@ YubiKeyRecognizer::Handler::Handler(
     iIsoDep(Q_NULLPTR),
     iIsoDepValidId(0)
 {
-    iRegisteredObject = iSystemBus.registerObject(PATH, INTERFACE, this,
+    iRegisteredObject = iSystemBus.registerObject(PATH, this,
         QDBusConnection::ExportAllSlots);
     if (!iRegisteredObject) {
         iRegisteredService = false;

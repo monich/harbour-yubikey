@@ -7,41 +7,63 @@ import "harbour"
 CoverBackground {
     id: cover
 
-    property bool haveYubiKey
-    property string password
-    property string name
-    property int passwordType: YubiKeyCard.TypeUnknown
-    property real passwordTimeLeft
-    property bool passwordMarkedForRefresh
+    property Page yubiKeyPage
 
     signal clearCardInfo()
 
+    readonly property bool _haveYubiKey: !!yubiKeyPage
+    readonly property int _passwordType: yubiKeyPage ? yubiKeyPage.favoriteTokenType : YubiKeyCard.TypeUnknown
+    readonly property real _passwordTimeLeft: yubiKeyPage ? yubiKeyPage.totpTimeLeft : 0
+    readonly property bool _passwordMarkedForRefresh: yubiKeyPage && yubiKeyPage.favoriteMarkedForRefresh
+    readonly property bool _yubiKeyPresent: yubiKeyPage && yubiKeyPage.yubiKeyPresent
+
+    readonly property string name: yubiKeyPage ? yubiKeyPage.favoriteName : ""
+    readonly property string password: yubiKeyPage ? yubiKeyPage.favoritePassword : ""
+    readonly property bool accessDenied: yubiKeyPage && yubiKeyPage.yubiKeyAccessDenied
+
+    property string _displayName
+    property string _displayPassword
+    property bool _displayAccessDenied
+
     onPasswordChanged: {
         // Don't update non-empty password during flip
-        if (flipable.passwordToShow === "" || !flipable.flipping) {
-            flipable.passwordToShow = password
+        if (_displayPassword === "" || !flipable.flipping) {
+            _displayPassword = password
         }
     }
 
     onNameChanged: {
         // Don't update non-empty password during flip
-        if (flipable.nameToShow === "" || !flipable.flipping) {
-            flipable.nameToShow = name
+        if (_displayName === "" || !flipable.flipping) {
+            _displayName = accessDenied ? "" : name
+        }
+    }
+
+    onAccessDeniedChanged: {
+        if (!_displayAccessDenied || !flipable.flipping) {
+            _displayAccessDenied = accessDenied
         }
     }
 
     Flipable {
         id: flipable
 
-        readonly property bool flipped: haveYubiKey
+        readonly property bool flipped: _haveYubiKey
         property bool flipping
         property real targetAngle
-        property string nameToShow
-        property string passwordToShow
+
 
         anchors.fill: parent
 
         readonly property int imageSize: Math.floor(parent.width * 3 / 5) + 2 * Theme.paddingSmall
+
+        onFlippingChanged: {
+            if (!flipping) {
+                _displayPassword = password
+                _displayName = accessDenied ? "" : name
+                _displayAccessDenied = accessDenied
+            }
+        }
 
         front: Item {
             anchors.fill: parent
@@ -100,7 +122,17 @@ CoverBackground {
                 truncationMode: TruncationMode.Fade
                 verticalAlignment: Text.AlignVCenter
                 color: Theme.highlightColor
-                text: flipable.nameToShow
+                text: _displayName
+            }
+
+            HarbourHighlightIcon {
+                y: Theme.itemSizeExtraSmall + yubiKeyProgress.imageMargins
+                anchors.horizontalCenter: parent.horizontalCenter
+                sourceSize.width: flipable.imageSize - 2 * yubiKeyProgress.imageMargins
+                source: "images/yubikey-lock.svg"
+                highlightColor: Theme.primaryColor
+                visible: opacity > 0
+                opacity: (_yubiKeyPresent ? 1 : 0.4) * (1.0 - yubiKeyProgress.opacity)
             }
 
             YubiKeyProgress {
@@ -110,8 +142,11 @@ CoverBackground {
                 width: flipable.imageSize
                 height: width
                 anchors.horizontalCenter: parent.horizontalCenter
-                timeLeft: passwordType === YubiKeyCard.TypeTOTP ? passwordTimeLeft : 0
+                timeLeft: _passwordType === YubiKeyCard.TypeTOTP ? _passwordTimeLeft : 0
                 active: flipable.flipped || flipable.flipping
+                visible: opacity > 0
+                opacity: _displayAccessDenied ? 0 : 1
+                Behavior on opacity { FadeAnimation { } }
             }
 
             Label {
@@ -135,13 +170,13 @@ CoverBackground {
                 truncationMode: TruncationMode.Fade
                 verticalAlignment: Text.AlignVCenter
                 color: Theme.highlightColor
-                opacity: ((passwordType === YubiKeyCard.TypeHOTP && !passwordMarkedForRefresh) ||
-                          (passwordType === YubiKeyCard.TypeTOTP && passwordTimeLeft)) ? 1 : 0.4
+                opacity: ((_passwordType === YubiKeyCard.TypeHOTP && !_passwordMarkedForRefresh) ||
+                          (_passwordType === YubiKeyCard.TypeTOTP && _passwordTimeLeft)) ? 1 : 0.4
                 transform: HarbourTextFlip {
                     enabled: !flipable.flipping
                     target: passwordLabel
-                    text: (password.length > 0 || passwordType === YubiKeyCard.TypeUnknown) ?
-                        flipable.passwordToShow : "\u2022 \u2022 \u2022"
+                    text: (_displayPassword.length > 0 || _passwordType === YubiKeyCard.TypeUnknown) ?
+                        _displayPassword : "\u2022 \u2022 \u2022"
                 }
 
                 Behavior on opacity { FadeAnimation { duration: 250 } }
@@ -193,12 +228,6 @@ CoverBackground {
             }
         }
 
-        onFlippingChanged: {
-            if (!flipping) {
-                passwordToShow = password
-            }
-        }
-
         onFlippedChanged: {
             if (!flipped) {
                 targetAngle = 360
@@ -214,7 +243,7 @@ CoverBackground {
     }
 
     CoverActionList {
-        enabled: haveYubiKey && !flipable.flipping
+        enabled: _haveYubiKey && !flipable.flipping
         CoverAction {
             iconSource: "image://theme/icon-cover-cancel"
             onTriggered: cover.clearCardInfo()

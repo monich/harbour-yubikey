@@ -25,12 +25,7 @@ ApplicationWindow {
 
     cover: Component {
         CoverPage {
-            haveYubiKey: !!yubiKeyPage
-            name: yubiKeyPage ? yubiKeyPage.favoriteName : ""
-            password: yubiKeyPage ? yubiKeyPage.favoritePassword : ""
-            passwordType: yubiKeyPage ? yubiKeyPage.favoriteTokenType : YubiKeyCard.TypeUnknown
-            passwordTimeLeft: yubiKeyPage ? yubiKeyPage.totpTimeLeft : 0
-            passwordMarkedForRefresh: yubiKeyPage && yubiKeyPage.favoriteMarkedForRefresh
+            yubiKeyPage: thisApp.yubiKeyPage
             onClearCardInfo: pageStack.pop(mainPage, PageStackAction.Immediate)
         }
     }

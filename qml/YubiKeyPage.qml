@@ -11,15 +11,16 @@ Page {
     showNavigationIndicator: false
 
     property alias yubiKeyId: yubiKey.yubiKeyId
+    property alias yubiKeyPresent: yubiKey.present
     property alias totpTimeLeft: yubiKey.totpTimeLeft
     property alias favoriteName: otpListModel.favoriteName
     property alias favoriteTokenType: otpListModel.favoriteTokenType
     property alias favoritePassword: otpListModel.favoritePassword
     property alias favoriteMarkedForRefresh: otpListModel.favoriteMarkedForRefresh
+    readonly property bool yubiKeyAccessDenied: yubiKey.authAccess === YubiKeyCard.AccessDenied
 
     property bool _invalidPassword
     readonly property int _fullHeight: isPortrait ? Screen.height : Screen.width
-    readonly property bool _needPassword: yubiKey.authAccess === YubiKeyCard.AccessDenied
     readonly property bool _authorized: yubiKey.authAccess === YubiKeyCard.AccessOpen ||
         yubiKey.authAccess === YubiKeyCard.AccessGranted
 
@@ -290,14 +291,14 @@ Page {
 
                 anchors.centerIn: parent
                 timeLeft: otpListModel.haveTotpCodes ? yubiKey.totpTimeLeft : 0
-                visible: !_needPassword
+                visible: !yubiKeyAccessDenied
             }
 
             HarbourHighlightIcon {
                 source: "images/yubikey-lock.svg"
                 sourceSize.width: Theme.iconSizeExtraLarge
                 anchors.centerIn: parent
-                visible: (_needPassword && isLandscape)
+                visible: (yubiKeyAccessDenied && isLandscape)
             }
         }
 
@@ -305,7 +306,7 @@ Page {
             id: contentFlickable
 
             contentHeight: authDataColumn.y + authDataColumn.height + Theme.paddingLarge
-            interactive: !_needPassword
+            interactive: !yubiKeyAccessDenied
             clip: isPortrait
             anchors {
                 bottom: parent.bottom
@@ -317,7 +318,7 @@ Page {
 
                 width: parent.width
                 visible: opacity > 0
-                opacity: _needPassword ? 0 : 1
+                opacity: yubiKeyAccessDenied ? 0 : 1
 
                 SilicaListView {
                     id: otpList
@@ -517,7 +518,7 @@ Page {
         Loader {
             id: passwordInputLoader
 
-            active: _needPassword
+            active: yubiKeyAccessDenied
             anchors {
                 left: contentFlickable.left
                 right: contentFlickable.right
@@ -574,7 +575,7 @@ Page {
                 PropertyChanges {
                     target: yubiKeyIconContainer
                     width: parent.width
-                    height: _needPassword ? yubiKeyIconContainer.maxHeight :
+                    height: yubiKeyAccessDenied ? yubiKeyIconContainer.maxHeight :
                         Math.max(Math.min(yubiKeyIconContainer.maxHeight, thisPage.height - contentFlickable.contentHeight), yubiKeyIconContainer.minHeight)
                 },
                 PropertyChanges {

@@ -1012,67 +1012,56 @@ YubiKeyTag::Operation::Private::selectResp(
     YubiKeyTag* tag = priv->iTag;
 
     self->ref();
-    if (!aError && tag) {
-        if (aSw == RC_OK && aResp) {
-            YubiKeyAlgorithm alg = YubiKeyAlgorithm_Unknown;
-            YubiKeyTag::Private* key = tag->iPrivate;
-            QByteArray cardId, version, challenge;
-            GUtilRange resp;
-            GUtilData data;
-            uchar t;
+    if (tag && !aError && aSw == RC_OK && aResp) {
+        YubiKeyAlgorithm alg = YubiKeyAlgorithm_Unknown;
+        YubiKeyTag::Private* key = tag->iPrivate;
+        QByteArray cardId, version, challenge;
+        GUtilRange resp;
+        GUtilData data;
+        uchar t;
 
-            HDEBUG("SELECT ok" << qPrintable(YubiKeyUtil::toHex(aResp)));
-            resp.end = (resp.ptr = aResp->bytes) + aResp->size;
-            while ((t = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
-                if (t == TLV_TAG_ALG) {
-                    if (data.size == 1) {
-                        alg = YubiKeyUtil::algorithmFromValue(data.bytes[0]);
-                        HDEBUG("Algorithm:" << alg);
-                    }
-                } else {
-                    const QByteArray bytes((char*)data.bytes, data.size);
-                    switch (t) {
-                    case TLV_TAG_NAME:
-                        HDEBUG("Id:" << qPrintable(YubiKeyUtil::toHex(bytes)));
-                        cardId = bytes;
-                        break;
-                    case TLV_TAG_VERSION:
-                        HDEBUG("Version:" << qPrintable(YubiKeyUtil::versionToString(bytes)));
-                        version = bytes;
-                        break;
-                    case TLV_TAG_CHALLENGE:
-                        HDEBUG("Challenge:" << qPrintable(YubiKeyUtil::toHex(bytes)));
-                        challenge = bytes;
-                        break;
-                    default:
-                        HDEBUG("Unhandled tag" << hex << t);
-                        break;
-                    }
+        HDEBUG("SELECT ok" << qPrintable(YubiKeyUtil::toHex(aResp)));
+        resp.end = (resp.ptr = aResp->bytes) + aResp->size;
+        while ((t = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
+            if (t == TLV_TAG_ALG) {
+                if (data.size == 1) {
+                    alg = YubiKeyUtil::algorithmFromValue(data.bytes[0]);
+                    HDEBUG("Algorithm:" << alg);
                 }
-            }
-
-            tag->ref();
-            key->updateYubiKeyId(cardId);
-            key->updateYubiKeyVersion(version);
-            key->updateYubiKeyAuthChallenge(challenge);
-            key->updateYubiKeyAuthAlgorithm(alg);
-            key->emitQueuedSignals(); // This may cancel this operation
-            if (priv->iCancelId) {
-                if (!self->startOperation()) {
-                    self->cancel();
+            } else {
+                const QByteArray bytes((char*)data.bytes, data.size);
+                switch (t) {
+                case TLV_TAG_NAME:
+                    HDEBUG("Id:" << qPrintable(YubiKeyUtil::toHex(bytes)));
+                    cardId = bytes;
+                    break;
+                case TLV_TAG_VERSION:
+                    HDEBUG("Version:" << qPrintable(YubiKeyUtil::versionToString(bytes)));
+                    version = bytes;
+                    break;
+                case TLV_TAG_CHALLENGE:
+                    HDEBUG("Challenge:" << qPrintable(YubiKeyUtil::toHex(bytes)));
+                    challenge = bytes;
+                    break;
+                default:
+                    HDEBUG("Unhandled tag" << hex << t);
+                    break;
                 }
-            }
-            tag->unref();
-        } else if (aSw == 0x6883) {
-            // This one seems to be recoverable
-            HDEBUG("SELECT error" << hex << aSw << "(retrying)");
-            if (nfc_isodep_client_transmit(priv->iIsoDep, &CMD_SELECT,
-                priv->iCancel, selectResp, self, staticUnref)) {
-                DUMP_APDU(&CMD_SELECT);
-                // Don't unref, it will be done by staticUnref
-                return;
             }
         }
+
+        tag->ref();
+        key->updateYubiKeyId(cardId);
+        key->updateYubiKeyVersion(version);
+        key->updateYubiKeyAuthChallenge(challenge);
+        key->updateYubiKeyAuthAlgorithm(alg);
+        key->emitQueuedSignals(); // This may cancel this operation
+        if (priv->iCancelId) {
+            if (!self->startOperation()) {
+                self->cancel();
+            }
+        }
+        tag->unref();
     } else {
         self->selectFailed(aSw, aError);
         priv->failed(self);

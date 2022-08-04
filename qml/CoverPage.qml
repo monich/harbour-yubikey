@@ -55,7 +55,6 @@ CoverBackground {
         property bool flipping
         property real targetAngle
 
-
         anchors.fill: parent
 
         readonly property int imageSize: Math.floor(parent.width * 3 / 5) + 2 * Theme.paddingSmall

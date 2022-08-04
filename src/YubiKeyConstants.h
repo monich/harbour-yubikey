@@ -65,7 +65,7 @@ public:
     static const uchar TYPE_TOTP = 0x20;
     static const uchar TYPE_MASK = 0xf0;
 
-    static const uchar PROPE_REQUIRE_TOUCH = 0x02;
+    static const uchar PROP_REQUIRE_TOUCH = 0x02;
 
     static const uint TOTP_PERIOD_SEC = 30;
 

@@ -1150,7 +1150,7 @@ YubiKey::Private::submitPutHotpToken(
             data.append((char)0);
         }
         data.append((char)TLV_TAG_PROPERTY);
-        data.append((char)PROPE_REQUIRE_TOUCH);
+        data.append((char)PROP_REQUIRE_TOUCH);
         YubiKeyUtil::appendTLV(&data, TLV_TAG_IMF, sizeof(imf), &imf);
 
         cmd.data.bytes = (const guint8*)data.constData();

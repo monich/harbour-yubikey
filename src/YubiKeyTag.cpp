@@ -153,6 +153,7 @@ public:
     bool setState(OpState);
     bool attachAndSetState(YubiKeyTag*, OpState);
     void submit(Operation*, YubiKeyTag*, bool aToFront);
+    void selectOk(Operation*, const GUtilData*);
     bool start(Operation*);
     void done(Operation*);
     void cancelled(Operation*);
@@ -162,6 +163,7 @@ public:
     static void staticCancel(GCancellable*, Operation*);
     static void staticLockResp(NfcTagClient*, NfcTagClientLock*, const GError*, void*);
     static void selectResp(NfcIsoDepClient*, const GUtilData*, guint aSw, const GError*, void*);
+    static void selectResp2(NfcIsoDepClient*, const GUtilData*, guint aSw, const GError*, void*);
     static gboolean releaseLockLater(gpointer aLock);
 
 public:
@@ -1001,7 +1003,7 @@ YubiKeyTag::Operation::Private::staticLockResp(
 
 void
 YubiKeyTag::Operation::Private::selectResp(
-    NfcIsoDepClient* aIsoDep,
+    NfcIsoDepClient*,
     const GUtilData* aResp,
     guint aSw,
     const GError* aError,
@@ -1009,64 +1011,111 @@ YubiKeyTag::Operation::Private::selectResp(
 {
     Operation* self = (Operation*)aOperation;
     Private* priv = self->iPrivate;
-    YubiKeyTag* tag = priv->iTag;
 
     self->ref();
-    if (tag && !aError && aSw == RC_OK && aResp) {
-        YubiKeyAlgorithm alg = YubiKeyAlgorithm_Unknown;
-        YubiKeyTag::Private* key = tag->iPrivate;
-        QByteArray cardId, version, challenge;
-        GUtilRange resp;
-        GUtilData data;
-        uchar t;
-
-        HDEBUG("SELECT ok" << qPrintable(YubiKeyUtil::toHex(aResp)));
-        resp.end = (resp.ptr = aResp->bytes) + aResp->size;
-        while ((t = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
-            if (t == TLV_TAG_ALG) {
-                if (data.size == 1) {
-                    alg = YubiKeyUtil::algorithmFromValue(data.bytes[0]);
-                    HDEBUG("Algorithm:" << alg);
-                }
-            } else {
-                const QByteArray bytes((char*)data.bytes, data.size);
-                switch (t) {
-                case TLV_TAG_NAME:
-                    HDEBUG("Id:" << qPrintable(YubiKeyUtil::toHex(bytes)));
-                    cardId = bytes;
-                    break;
-                case TLV_TAG_VERSION:
-                    HDEBUG("Version:" << qPrintable(YubiKeyUtil::versionToString(bytes)));
-                    version = bytes;
-                    break;
-                case TLV_TAG_CHALLENGE:
-                    HDEBUG("Challenge:" << qPrintable(YubiKeyUtil::toHex(bytes)));
-                    challenge = bytes;
-                    break;
-                default:
-                    HDEBUG("Unhandled tag" << hex << t);
-                    break;
-                }
+    if (priv->iTag && !aError) {
+        // 6883 appears to be recovertable and seems to be caused
+        // by another app trying to select a non-existent app on
+        // this YubiKey. The next attempt usually works.
+        if (aSw == 0x6883) {
+            HDEBUG("SELECT error" << hex << aSw << "(retrying)");
+            if (nfc_isodep_client_transmit(priv->iIsoDep, &CMD_SELECT,
+                priv->iCancel, selectResp2, self, staticUnref)) {
+                DUMP_APDU(&CMD_SELECT);
+                // The ref will be released by staticUnref
+                return;
             }
+        } else if (aSw == RC_OK && aResp) {
+            priv->selectOk(self, aResp);
+            self->unref();
+            return;
         }
+    }
 
-        tag->ref();
-        key->updateYubiKeyId(cardId);
-        key->updateYubiKeyVersion(version);
-        key->updateYubiKeyAuthChallenge(challenge);
-        key->updateYubiKeyAuthAlgorithm(alg);
-        key->emitQueuedSignals(); // This may cancel this operation
-        if (priv->iCancelId) {
-            if (!self->startOperation()) {
-                self->cancel();
-            }
-        }
-        tag->unref();
+    // Catch-all error case
+    self->selectFailed(aSw, aError);
+    priv->failed(self);
+    self->unref();
+}
+
+void
+YubiKeyTag::Operation::Private::selectResp2(
+    NfcIsoDepClient*,
+    const GUtilData* aResp,
+    guint aSw,
+    const GError* aError,
+    void* aOperation)
+{
+    Operation* self = (Operation*)aOperation;
+    Private* priv = self->iPrivate;
+
+    self->ref();
+    if (priv->iTag && !aError && aSw == RC_OK && aResp) {
+        priv->selectOk(self, aResp);
     } else {
         self->selectFailed(aSw, aError);
         priv->failed(self);
     }
     self->unref();
+}
+
+void
+YubiKeyTag::Operation::Private::selectOk(
+    Operation* aOperation,
+    const GUtilData* aResp)
+{
+    YubiKeyTag* tag = iTag;
+    YubiKeyTag::Private* key = iTag->iPrivate;
+    YubiKeyAlgorithm alg = YubiKeyAlgorithm_Unknown;
+    QByteArray cardId, version, challenge;
+    GUtilRange resp;
+    GUtilData data;
+    uchar t;
+
+    HDEBUG("SELECT ok" << qPrintable(YubiKeyUtil::toHex(aResp)));
+    resp.end = (resp.ptr = aResp->bytes) + aResp->size;
+    while ((t = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
+        if (t == TLV_TAG_ALG) {
+            if (data.size == 1) {
+                alg = YubiKeyUtil::algorithmFromValue(data.bytes[0]);
+                HDEBUG("Algorithm:" << alg);
+            }
+        } else {
+            const QByteArray bytes((char*)data.bytes, data.size);
+            switch (t) {
+            case TLV_TAG_NAME:
+                HDEBUG("Id:" << qPrintable(YubiKeyUtil::toHex(bytes)));
+                cardId = bytes;
+                break;
+            case TLV_TAG_VERSION:
+                HDEBUG("Version:" << qPrintable(YubiKeyUtil::versionToString(bytes)));
+                version = bytes;
+                break;
+            case TLV_TAG_CHALLENGE:
+                HDEBUG("Challenge:" << qPrintable(YubiKeyUtil::toHex(bytes)));
+                challenge = bytes;
+                break;
+            default:
+                HDEBUG("Unhandled tag" << hex << t);
+                break;
+            }
+        }
+    }
+
+    iTag->ref();
+    key->updateYubiKeyId(cardId);
+    key->updateYubiKeyVersion(version);
+    key->updateYubiKeyAuthChallenge(challenge);
+    key->updateYubiKeyAuthAlgorithm(alg);
+    key->emitQueuedSignals(); // This may cancel this operation
+    if (iCancelId) {
+        if (!aOperation->startOperation()) {
+            aOperation->cancel();
+        }
+    }
+    // Must use YubiKeyTag pointer from stack because the operation
+    // may get detached from YubiKeyTag by now and iTag may be NULL
+    tag->unref();
 }
 
 // ==========================================================================

@@ -11,6 +11,8 @@ ListItem {
     property alias name: nameLabel.text
     property string password
     property bool favorite
+    property bool expired
+    property bool refreshable
     property bool landscape
     property bool totpValid
     property bool markedForRefresh
@@ -21,9 +23,8 @@ ListItem {
     signal cancel()
     signal requestRefresh()
 
-
     onPasswordChanged: {
-        if (type === YubiKeyCard.TypeHOTP) {
+        if (refreshable) {
             actionButtonAnimation.start()
         }
     }
@@ -88,7 +89,7 @@ ListItem {
 
             anchors.verticalCenter: parent.verticalCenter
             highlighted: down || thisItem.down
-            visible: type === YubiKeyCard.TypeHOTP
+            visible: refreshable
             opacity: menuOpen ? 0.4 : 1
             icon.source: markedForRefresh ? "image://theme/icon-m-clear" : "image://theme/icon-m-refresh"
             onClicked: markedForRefresh ? thisItem.cancel() : thisItem.requestRefresh()
@@ -105,8 +106,7 @@ ListItem {
                 bold: true
             }
             visible: opacity > 0
-            opacity: ((type === YubiKeyCard.TypeHOTP && !markedForRefresh) ||
-                (type === YubiKeyCard.TypeTOTP && totpValid)) ? 1 : 0.4
+            opacity: (expired || markedForRefresh) ? 0.4 : 1
             transform: HarbourTextFlip {
                 text: thisItem.password
                 target: passwordLabel

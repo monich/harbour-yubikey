@@ -51,6 +51,8 @@
     role(Algorithm,algorithm) \
     role(Password,password) \
     role(Favorite,favorite) \
+    role(Refreshable,refreshable) \
+    role(Expired,expired) \
     role(MarkedForRefresh,markedForRefresh) \
     last(MarkedForDeletion,markedForDeletion)
 
@@ -66,9 +68,11 @@
     s(FavoriteMarkedForRefresh,favoriteMarkedForRefresh) \
     s(FavoriteName,favoriteName) \
     s(FavoritePassword,favoritePassword) \
+    s(FavoritePasswordExpired,favoritePasswordExpired) \
+    s(RefreshableTokens,refreshableTokens) \
     s(MarkedForRefresh,markedForRefresh) \
     s(MarkedForDeletion,markedForDeletion) \
-    s(HaveTotpCodes,haveTotpCodes)
+    s(HaveExpiringTotpCodes,haveExpiringTotpCodes)
 
 // ==========================================================================
 // YubiKeyAuthListModel::ModelData
@@ -110,6 +114,8 @@ public:
     const YubiKeyAlgorithm iAlgorithm;
     QString iPassword;
     bool iFavorite;
+    bool iExpired;
+    bool iRefreshable;
     Mark iMark;
 };
 
@@ -122,6 +128,8 @@ YubiKeyAuthListModel::ModelData::ModelData(
     iType(aType),
     iAlgorithm(aAlgorithm),
     iFavorite(false),
+    iExpired(false),
+    iRefreshable(aType == YubiKeyTokenType_HOTP),
     iMark(MarkNone)
 {
 }
@@ -136,6 +144,8 @@ YubiKeyAuthListModel::ModelData::get(
     case AlgorithmRole: return iAlgorithm;
     case PasswordRole: return iPassword;
     case FavoriteRole: return iFavorite;
+    case ExpiredRole: return iExpired;
+    case RefreshableRole: return iRefreshable;
     case MarkedForRefreshRole: return iMark == MarkForRefresh;
     case MarkedForDeletionRole: return iMark == MarkForDeletion;
     }
@@ -168,14 +178,17 @@ YubiKeyAuthListModel::ModelData::toAuthAlgorithm(
 class YubiKeyAuthListModel::ModelData::List : public QList<ModelData*>
 {
 public:
-    List(QString aHexData = QString());
+    List() {}
+    List(const QString aHexData, const List, const QStringList);
 
     ModelData* dataAt(int) const;
     int findUtf8(const QByteArray, int) const;
 };
 
 YubiKeyAuthListModel::ModelData::List::List(
-    QString aHexData)
+    const QString aHexData,
+    const List aOldList,
+    const QStringList aRefreshList)
 {
     uchar tag;
     GUtilRange resp;
@@ -196,15 +209,31 @@ YubiKeyAuthListModel::ModelData::List::List(
     HDEBUG("Credentials:");
     while ((tag = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
         if (tag == TLV_TAG_LIST_ENTRY && data.size >= 1) {
-            ModelData* modelData = new ModelData(QByteArray
-                ((char*)(data.bytes + 1), (int)data.size - 1),
+            const QByteArray utf8((char*)(data.bytes + 1), (int)data.size - 1);
+            ModelData* newEntry = new ModelData(utf8,
                 toAuthType(data.bytes[0]), toAuthAlgorithm(data.bytes[0]));
+            const int oldEntryPos = aOldList.findUtf8(utf8, count());
 
-            append(modelData);
+            // Always mark HOTP codes as refreshable
+            newEntry->iRefreshable =
+                (newEntry->iType == YubiKeyTokenType_HOTP) ||
+                aRefreshList.contains(newEntry->iName);
+
+            // Copy other mutable attributes from the old entry
+            if (oldEntryPos >= 0) {
+                const ModelData* oldEntry = aOldList.at(oldEntryPos);
+
+                newEntry->iPassword = oldEntry->iPassword;
+                newEntry->iFavorite = oldEntry->iFavorite;
+                newEntry->iExpired = oldEntry->iExpired;
+                newEntry->iMark = oldEntry->iMark;
+            }
+
+            append(newEntry);
             HDEBUG("Entry #" << size());
-            HDEBUG("  Name:" << modelData->iName);
-            HDEBUG("  Type:" << modelData->iType);
-            HDEBUG("  Alg:" << modelData->iAlgorithm);
+            HDEBUG("  Name:" << newEntry->iName);
+            HDEBUG("  Type:" << newEntry->iType);
+            HDEBUG("  Alg:" << newEntry->iAlgorithm);
         }
     }
 }
@@ -229,10 +258,8 @@ YubiKeyAuthListModel::ModelData::List::findUtf8(
         // A miss, scan the entire list
         const int n = count();
         for (int i = 0; i < n; i++) {
-            if (i != aIndex) {
-                if (at(i)->iUtf8Name == aUtf8) {
-                    return i;
-                }
+            if (i != aIndex && at(i)->iUtf8Name == aUtf8) {
+                return i;
             }
         }
         return -1;
@@ -270,6 +297,7 @@ public:
     void setFavoriteMarkedForRefresh(bool);
     void setFavoriteName(const QString);
     void setFavoritePassword(const QString);
+    void setFavoritePasswordExpired(bool);
     void updateMarkedForRefresh();
     void updateMarkedForDeletion();
     void markChanged(ModelData::Mark, QVector<int>*);
@@ -289,10 +317,12 @@ public:
     QString iFavoritePassword;
     YubiKeyTokenType iFavoriteTokenType;
     bool iFavoriteMarkedForRefresh;
+    bool iFavoritePasswordExpired;
     ModelData::List iList;
+    QStringList iRefreshableTokens;
     QStringList iMarkedForRefresh;
     QStringList iMarkedForDeletion;
-    bool iHaveTotpCodes;
+    bool iHaveExpiringTotpCodes;
 };
 
 
@@ -308,7 +338,8 @@ YubiKeyAuthListModel::Private::Private(
     iSettings(Q_NULLPTR),
     iFavoriteTokenType(YubiKeyTokenType_Unknown),
     iFavoriteMarkedForRefresh(false),
-    iHaveTotpCodes(false)
+    iFavoritePasswordExpired(false),
+    iHaveExpiringTotpCodes(false)
 {
 }
 
@@ -381,36 +412,38 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
 
             const QString favoriteName(iSettings->value(FAVORITE_ENTRY).toString());
             const QVector<int> roles(1, ModelData::FavoriteRole);
-            QString realFavoriteName, realFavoritePassword;
+            QString realFavoriteName, favoritePassword;
             YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
-            bool favoriteMfR = false;
+            bool favoriteExpired = false, favoriteMfR = false;
 
             // Update the roles to match the settings
             for (int i = 0; i < iList.count(); i++) {
-                ModelData* data = iList.at(i);
+                ModelData* entry = iList.at(i);
 
-                if (data->iName == favoriteName) {
+                if (entry->iName == favoriteName) {
                     realFavoriteName = favoriteName;
-                    realFavoritePassword = data->iPassword;
-                    favoriteTokenType = data->iType;
-                    favoriteMfR = (data->iMark == ModelData::MarkForRefresh);
-                    if (!data->iFavorite) {
+                    favoritePassword = entry->iPassword;
+                    favoriteTokenType = entry->iType;
+                    favoriteExpired = entry->iExpired;
+                    favoriteMfR = (entry->iMark == ModelData::MarkForRefresh);
+                    if (!entry->iFavorite) {
                         const QModelIndex idx(iModel->index(i));
 
-                        data->iFavorite = true;
+                        entry->iFavorite = true;
                         Q_EMIT iModel->dataChanged(idx, idx, roles);
                     }
-                } else if (data->iFavorite) {
+                } else if (entry->iFavorite) {
                     const QModelIndex idx(iModel->index(i));
 
-                    data->iFavorite = false;
+                    entry->iFavorite = false;
                     Q_EMIT iModel->dataChanged(idx, idx, roles);
                 }
             }
 
             setFavoriteName(realFavoriteName);
-            setFavoritePassword(realFavoritePassword);
             setFavoriteTokenType(favoriteTokenType);
+            setFavoritePassword(favoritePassword);
+            setFavoritePasswordExpired(favoriteExpired);
             setFavoriteMarkedForRefresh(favoriteMfR);
         }
     }
@@ -420,7 +453,7 @@ void
 YubiKeyAuthListModel::Private::setItems(
     const ModelData::List aList)
 {
-    const bool hadTotpCodes = iHaveTotpCodes;
+    const bool hadExpiringTotpCodes = iHaveExpiringTotpCodes;
     const QStringList prevMarkedForRefresh(iMarkedForRefresh);
     const QStringList prevMarkedForDeletion(iMarkedForDeletion);
     const int n = aList.count();
@@ -428,43 +461,45 @@ YubiKeyAuthListModel::Private::setItems(
     qDeleteAll(iList);
 
     iList = aList;
-    iHaveTotpCodes = false;
+    iHaveExpiringTotpCodes = false;
     iMarkedForRefresh.clear();
     iMarkedForDeletion.clear();
 
-    bool favoriteMfR = false;
+    bool favoriteExpired = false, favoriteMfR = false;
     YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
-    QString realFavoriteName, realFavoritePassword;
+    QString realFavoriteName, favoritePassword;
     const QString favoriteName(iSettings ?
         iSettings->value(FAVORITE_ENTRY).toString() :
         QString());
 
     for (int i = 0; i < n; i++) {
-        ModelData* data = iList.at(i);
+        ModelData* entry = iList.at(i);
 
-        data->iFavorite = (data->iName == favoriteName);
-        if (data->iFavorite) {
+        entry->iFavorite = (entry->iName == favoriteName);
+        if (entry->iFavorite) {
             realFavoriteName = favoriteName;
-            realFavoritePassword = data->iPassword;
-            favoriteTokenType = data->iType;
-            favoriteMfR = (data->iMark == ModelData::MarkForRefresh);
+            favoritePassword = entry->iPassword;
+            favoriteTokenType = entry->iType;
+            favoriteExpired = entry->iExpired;
+            favoriteMfR = (entry->iMark == ModelData::MarkForRefresh);
         }
-        if (prevMarkedForRefresh.contains(data->iName)) {
-            iMarkedForRefresh.append(data->iName);
-            data->iMark = ModelData::MarkForRefresh;
-        } else if (prevMarkedForDeletion.contains(data->iName)) {
-            iMarkedForDeletion.append(data->iName);
-            data->iMark = ModelData::MarkForDeletion;
+        if (prevMarkedForRefresh.contains(entry->iName)) {
+            iMarkedForRefresh.append(entry->iName);
+            entry->iMark = ModelData::MarkForRefresh;
+        } else if (prevMarkedForDeletion.contains(entry->iName)) {
+            iMarkedForDeletion.append(entry->iName);
+            entry->iMark = ModelData::MarkForDeletion;
         } else {
-            data->iMark = ModelData::MarkNone;
+            entry->iMark = ModelData::MarkNone;
         }
-        if (data->iType == YubiKeyTokenType_TOTP) {
-            iHaveTotpCodes = true;
+        if (!entry->iRefreshable && !entry->iExpired) {
+            iHaveExpiringTotpCodes = true;
         }
     }
 
     setFavoriteName(realFavoriteName);
-    setFavoritePassword(realFavoritePassword);
+    setFavoritePassword(favoritePassword);
+    setFavoritePasswordExpired(favoriteExpired);
     setFavoriteTokenType(favoriteTokenType);
     setFavoriteMarkedForRefresh(favoriteMfR);
     if (prevMarkedForRefresh != iMarkedForRefresh) {
@@ -473,8 +508,8 @@ YubiKeyAuthListModel::Private::setItems(
     if (prevMarkedForDeletion != iMarkedForDeletion) {
         queueSignal(SignalMarkedForDeletionChanged);
     }
-    if (hadTotpCodes != iHaveTotpCodes) {
-        queueSignal(SignalHaveTotpCodesChanged);
+    if (hadExpiringTotpCodes != iHaveExpiringTotpCodes) {
+        queueSignal(SignalHaveExpiringTotpCodesChanged);
     }
 }
 
@@ -519,6 +554,16 @@ YubiKeyAuthListModel::Private::setFavoritePassword(
 }
 
 void
+YubiKeyAuthListModel::Private::setFavoritePasswordExpired(
+    bool aExpired)
+{
+    if (iFavoritePasswordExpired != aExpired) {
+        iFavoritePasswordExpired = aExpired;
+        queueSignal(SignalFavoritePasswordExpiredChanged);
+    }
+}
+
+void
 YubiKeyAuthListModel::Private::updateMarkedForRefresh()
 {
     const QStringList prevMarkedForRefresh(iMarkedForRefresh);
@@ -552,10 +597,10 @@ YubiKeyAuthListModel::Private::marked(
     QStringList list;
 
     for (int i = 0; i < n; i++) {
-        const ModelData* data = iList.at(i);
+        const ModelData* entry = iList.at(i);
 
-        if (data->iMark == aMark) {
-            list.append(data->iName);
+        if (entry->iMark == aMark) {
+            list.append(entry->iName);
         }
     }
     return list;
@@ -640,12 +685,13 @@ YubiKeyAuthListModel::authList() const
 
 void
 YubiKeyAuthListModel::setAuthList(
-    QString aHexAuthList)
+    const QString aHexAuthList)
 {
     if (iPrivate->iHexAuthList != aHexAuthList) {
         // All this just to avoid resetting the entire model
         // which resets view position too.
-        const ModelData::List newList(aHexAuthList);
+        const ModelData::List newList(aHexAuthList, iPrivate->iList,
+            iPrivate->iRefreshableTokens);
         const int prevCount = iPrivate->iList.count();
         const int newCount = newList.count();
 
@@ -684,7 +730,7 @@ YubiKeyAuthListModel::authData() const
 
 void
 YubiKeyAuthListModel::setAuthData(
-    QString aHexAuthData)
+    const QString aHexAuthData)
 {
     if (iPrivate->iHexAuthData != aHexAuthData) {
         iPrivate->iHexAuthData = aHexAuthData;
@@ -762,6 +808,16 @@ YubiKeyAuthListModel::setAuthData(
                         HDEBUG((currentPos + 1) << strPass);
                         if (entry->iFavorite) {
                             iPrivate->setFavoritePassword(strPass);
+                            iPrivate->setFavoritePasswordExpired(false);
+                        }
+                        if (entry->iExpired) {
+                            entry->iExpired = false;
+                            roles.append(ModelData::ExpiredRole);
+                        }
+                        if (!iPrivate->iHaveExpiringTotpCodes &&
+                            entry->iType == YubiKeyTokenType_TOTP) {
+                            iPrivate->iHaveExpiringTotpCodes = true;
+                            iPrivate->queueSignal(Private::SignalHaveExpiringTotpCodesChanged);
                         }
                     }
                     if (!roles.isEmpty()) {
@@ -778,6 +834,41 @@ YubiKeyAuthListModel::setAuthData(
 
         if (refreshMarksUpdated) {
             iPrivate->updateMarkedForRefresh();
+        }
+        iPrivate->emitQueuedSignals();
+    }
+}
+
+QStringList
+YubiKeyAuthListModel::refreshableTokens() const
+{
+    return iPrivate->iRefreshableTokens;
+}
+
+void
+YubiKeyAuthListModel::setRefreshableTokens(
+    const QStringList aRefreshableTokens)
+{
+    if (iPrivate->iRefreshableTokens != aRefreshableTokens) {
+        iPrivate->iRefreshableTokens = aRefreshableTokens;
+        iPrivate->queueSignal(Private::SignalRefreshableTokensChanged);
+
+        const QVector<int> roles(1, ModelData::RefreshableRole);
+
+        HDEBUG(aRefreshableTokens);
+        for (int i = 0; i < iPrivate->iList.count(); i++) {
+            // Always mark HOTP codes as refreshable
+            ModelData* entry = iPrivate->iList.at(i);
+            const bool refreshable = (entry->iType == YubiKeyTokenType_HOTP) ||
+                iPrivate->iRefreshableTokens.contains(entry->iName);
+
+            if (entry->iRefreshable != refreshable) {
+                const QModelIndex idx(index(i));
+
+                HDEBUG(entry->iName << (refreshable ? "" : "not") << "refreshable");
+                entry->iRefreshable = refreshable;
+                Q_EMIT dataChanged(idx, idx, roles);
+            }
         }
         iPrivate->emitQueuedSignals();
     }
@@ -807,6 +898,12 @@ YubiKeyAuthListModel::favoritePassword() const
     return iPrivate->iFavoritePassword;
 }
 
+bool
+YubiKeyAuthListModel::favoritePasswordExpired() const
+{
+    return iPrivate->iFavoritePasswordExpired;
+}
+
 QStringList
 YubiKeyAuthListModel::markedForRefresh() const
 {
@@ -820,9 +917,34 @@ YubiKeyAuthListModel::markedForDeletion() const
 }
 
 bool
-YubiKeyAuthListModel::haveTotpCodes() const
+YubiKeyAuthListModel::haveExpiringTotpCodes() const
 {
-    return iPrivate->iHaveTotpCodes;
+    return iPrivate->iHaveExpiringTotpCodes;
+}
+
+void
+YubiKeyAuthListModel::totpCodesExpired()
+{
+    if (iPrivate->iHaveExpiringTotpCodes) {
+        iPrivate->iHaveExpiringTotpCodes = false;
+        iPrivate->queueSignal(Private::SignalHaveExpiringTotpCodesChanged);
+
+        const QVector<int> roles(1, ModelData::ExpiredRole);
+
+        for (int i = 0; i < iPrivate->iList.count(); i++) {
+            ModelData* entry = iPrivate->iList.at(i);
+
+            // Only TOTP codes expire
+            if (entry->iType == YubiKeyTokenType_TOTP && !entry->iExpired) {
+                const QModelIndex idx(index(i));
+
+                HDEBUG(entry->iName << "expired");
+                entry->iExpired = true;
+                Q_EMIT dataChanged(idx, idx, roles);
+            }
+        }
+        iPrivate->emitQueuedSignals();
+    }
 }
 
 Qt::ItemFlags
@@ -854,8 +976,8 @@ YubiKeyAuthListModel::data(
     const QModelIndex& aIndex,
     int aRole) const
 {
-    const ModelData* data = iPrivate->iList.dataAt(aIndex.row());
-    return data ? data->get((ModelData::Role)aRole) : QVariant();
+    const ModelData* entry = iPrivate->iList.dataAt(aIndex.row());
+    return entry ? entry->get((ModelData::Role)aRole) : QVariant();
 }
 
 bool
@@ -931,6 +1053,8 @@ YubiKeyAuthListModel::setData(
         case ModelData::TypeRole:
         case ModelData::AlgorithmRole:
         case ModelData::PasswordRole:
+        case ModelData::ExpiredRole:
+        case ModelData::RefreshableRole:
             HDEBUG(aIndex.row() << aRole << "nope");
             break;
         }

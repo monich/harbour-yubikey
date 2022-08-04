@@ -51,13 +51,15 @@ class YubiKeyAuthListModel :
     Q_PROPERTY(QString yubiKeyId READ yubiKeyId WRITE setYubiKeyId NOTIFY yubiKeyIdChanged)
     Q_PROPERTY(int favoriteTokenType READ favoriteTokenType NOTIFY favoriteTokenTypeChanged)
     Q_PROPERTY(bool favoriteMarkedForRefresh READ favoriteMarkedForRefresh NOTIFY favoriteMarkedForRefreshChanged)
+    Q_PROPERTY(bool favoritePasswordExpired READ favoritePasswordExpired NOTIFY favoritePasswordExpiredChanged)
     Q_PROPERTY(QString favoriteName READ favoriteName NOTIFY favoriteNameChanged)
     Q_PROPERTY(QString favoritePassword READ favoritePassword NOTIFY favoritePasswordChanged)
     Q_PROPERTY(QString authList READ authList WRITE setAuthList NOTIFY authListChanged)
     Q_PROPERTY(QString authData READ authData WRITE setAuthData NOTIFY authDataChanged)
+    Q_PROPERTY(QStringList refreshableTokens READ refreshableTokens WRITE setRefreshableTokens NOTIFY refreshableTokensChanged)
     Q_PROPERTY(QStringList markedForRefresh READ markedForRefresh NOTIFY markedForRefreshChanged)
     Q_PROPERTY(QStringList markedForDeletion READ markedForDeletion NOTIFY markedForDeletionChanged)
-    Q_PROPERTY(bool haveTotpCodes READ haveTotpCodes NOTIFY haveTotpCodesChanged)
+    Q_PROPERTY(bool haveExpiringTotpCodes READ haveExpiringTotpCodes NOTIFY haveExpiringTotpCodesChanged)
 
 public:
     YubiKeyAuthListModel(QObject* aParent = Q_NULLPTR);
@@ -67,18 +69,22 @@ public:
     QString yubiKeyId() const;
 
     QString authList() const;
-    void setAuthList(QString);
+    void setAuthList(const QString);
 
     QString authData() const;
-    void setAuthData(QString);
+    void setAuthData(const QString);
+
+    QStringList refreshableTokens() const;
+    void setRefreshableTokens(const QStringList);
 
     YubiKeyTokenType favoriteTokenType() const;
     bool favoriteMarkedForRefresh() const;
+    bool favoritePasswordExpired() const;
     QString favoriteName() const;
     QString favoritePassword() const;
     QStringList markedForRefresh() const;
     QStringList markedForDeletion() const;
-    bool haveTotpCodes() const;
+    bool haveExpiringTotpCodes() const;
 
     // QAbstractItemModel
     Qt::ItemFlags flags(const QModelIndex&) const Q_DECL_OVERRIDE;
@@ -87,17 +93,22 @@ public:
     QVariant data(const QModelIndex&, int) const Q_DECL_OVERRIDE;
     bool setData(const QModelIndex&, const QVariant&, int) Q_DECL_OVERRIDE;
 
+public Q_SLOTS:
+    void totpCodesExpired();
+
 Q_SIGNALS:
     void yubiKeyIdChanged();
     void favoriteTokenTypeChanged();
     void favoriteMarkedForRefreshChanged();
+    void favoritePasswordExpiredChanged();
     void favoriteNameChanged();
     void favoritePasswordChanged();
     void authListChanged();
     void authDataChanged();
+    void refreshableTokensChanged();
     void markedForRefreshChanged();
     void markedForDeletionChanged();
-    void haveTotpCodesChanged();
+    void haveExpiringTotpCodesChanged();
 
 private:
     class ModelData;

@@ -90,6 +90,7 @@ operator<<(
     s(YubiKeyOtpData,yubiKeyOtpData) \
     s(YubiKeyState,yubiKeyState) \
     s(AuthAccess,authAccess) \
+    s(RefreshableTokens,refreshableTokens) \
     s(OperationIds,operationIds) \
     s(Present,present) \
     s(OtpListFetched,otpListFetched) \
@@ -300,6 +301,9 @@ YubiKeyCard::Private::setYubiKeyId(
             if (iYubiKey->authAccess() != YubiKeyAuthAccessUnknown) {
                 queueSignal(SignalAuthAccessChanged);
             }
+            if (!iYubiKey->refreshableTokens().isEmpty()) {
+                queueSignal(SignalRefreshableTokensChanged);
+            }
             if (!iYubiKey->operationIds().isEmpty()) {
                 queueSignal(SignalOperationIdsChanged);
             }
@@ -315,6 +319,7 @@ YubiKeyCard::Private::setYubiKeyId(
         const QByteArray prevOtpList(iYubiKey ? iYubiKey->otpList() : QByteArray());
         const QByteArray prevOtpData(iYubiKey ? iYubiKey->otpData() : QByteArray());
         const QList<int> prevOperationIds(iYubiKey ? iYubiKey->operationIds() : QList<int>());
+        const QStringList prevRefreshableTokens(iYubiKey ? iYubiKey->refreshableTokens() : QStringList());
         const YubiKeyAuthAccess prevAuthAccess = authAccess();
 
         queueSignal(SignalYubiKeyIdChanged);
@@ -358,8 +363,14 @@ YubiKeyCard::Private::setYubiKeyId(
             SIGNAL(accessKeyNotAccepted()),
             SIGNAL(accessKeyNotAccepted())));
         HVERIFY(card->connect(iYubiKey,
+            SIGNAL(totpCodesExpired()),
+            SIGNAL(totpCodesExpired())));
+        HVERIFY(card->connect(iYubiKey,
             SIGNAL(authAccessChanged()),
             SIGNAL(authAccessChanged())));
+        HVERIFY(card->connect(iYubiKey,
+            SIGNAL(refreshableTokensChanged()),
+            SIGNAL(refreshableTokensChanged())));
         HVERIFY(card->connect(iYubiKey,
             SIGNAL(operationIdsChanged()),
             SIGNAL(operationIdsChanged())));
@@ -394,11 +405,14 @@ YubiKeyCard::Private::setYubiKeyId(
         if (iYubiKey->otpData() != prevOtpData) {
             queueSignal(SignalYubiKeyOtpDataChanged);
         }
-        if (iYubiKey->authAccess() != prevAuthAccess) {
-            queueSignal(SignalAuthAccessChanged);
-        }
         if (iYubiKey->operationIds() != prevOperationIds) {
             queueSignal(SignalOperationIdsChanged);
+        }
+        if (iYubiKey->refreshableTokens() != prevRefreshableTokens) {
+            queueSignal(SignalRefreshableTokensChanged);
+        }
+        if (iYubiKey->authAccess() != prevAuthAccess) {
+            queueSignal(SignalAuthAccessChanged);
         }
     }
 }
@@ -507,7 +521,7 @@ YubiKeyCard::operationIds() const
 }
 
 YubiKeyCard::YubiKeyState
-YubiKeyCard::getYubiKeyState() const
+YubiKeyCard::yubiKeyState() const
 {
     return iPrivate->iYubiKeyState;
 }
@@ -534,6 +548,14 @@ YubiKeyCard::yubiKeyOtpData() const
     return iPrivate->iYubiKey ?
         iPrivate->iYubiKey->otpDataString() :
         QString();
+}
+
+QStringList
+YubiKeyCard::refreshableTokens() const
+{
+    return iPrivate->iYubiKey ?
+        iPrivate->iYubiKey->refreshableTokens() :
+        QStringList();
 }
 
 bool

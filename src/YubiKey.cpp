@@ -61,6 +61,7 @@
     s(OtpData,otpData) \
     s(Present,present) \
     s(AuthAccess,authAccess) \
+    s(RefreshableTokens,refreshableTokens) \
     s(OperationIds,operationIds) \
     s(TotpTimeLeft,totpTimeLeft) \
     s(TotpValid,totpValid)
@@ -108,6 +109,7 @@ public:
         YUBIKEY_SIGNALS(SIGNAL_ENUM_)
 #undef  SIGNAL_ENUM_
         SignalAccessKeyNotAccepted,
+        SignalTotpCodesExpired,
         SignalCount
     };
 
@@ -286,6 +288,7 @@ public:
     QString iOtpListString;
     QByteArray iOtpData;
     QString iOtpDataString;
+    QStringList iRefreshableTokens;
     QList<int> iOperationIds;
     bool iOtpListFetched;
     QTimer* iTotpTimer;
@@ -402,7 +405,8 @@ YubiKey::Private::emitQueuedSignals()
 #define SIGNAL_NAME_(Name,name) G_STRINGIFY(name##Changed),
         YUBIKEY_SIGNALS(SIGNAL_NAME_)
 #undef  SIGNAL_NAME_
-        "signalAccessKeyNotAccepted"
+        "signalAccessKeyNotAccepted",
+        "totpCodesExpired"
     };
     Q_STATIC_ASSERT(G_N_ELEMENTS(signalName) == SignalCount);
     if (iQueuedSignals) {
@@ -700,7 +704,53 @@ YubiKey::Private::updateOtpData(
         iOtpData = aOtpData;
         iOtpDataString = YubiKeyUtil::toHex(aOtpData);
         HDEBUG(qPrintable(iOtpDataString));
+
+        uchar tag;
+        GUtilRange resp;
+        GUtilData data;
+        QString name;
+        QStringList refreshableTokens;
+
+        resp.end = (resp.ptr = (guint8*)aOtpData.constData()) + aOtpData.size();
+
+        // Calculate All Response Syntax
+        //
+        // For HOTP the response tag is 0x77 (No response). For credentials
+        // requiring touch the response tag is 0x7c (No response).
+        // The response will be a list of the following objects:
+        // +---------------+----------------------------------------------+
+        // | Name tag      | 0x71                                         |
+        // | Name length   | Length of name                               |
+        // | Name data     | Name                                         |
+        // | Response tag  | 0x77 for HOTP, 0x7c for touch, 0x75 for full |
+        // |               | response or 0x76 for truncated response      |
+        // +---------------+----------------------------------------------+
+        // | Response len  | Length of response + 1                       |
+        // | Digits        | Number of digits in the OATH code            |
+        // | Response data | Response                                     |
+        // +---------------+----------------------------------------------+
+        while ((tag = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
+            switch (tag) {
+            case YubiKeyConstants::TLV_TAG_NAME:
+                name = QString::fromUtf8((char*)data.bytes, (int)data.size);
+                break;
+            case TLV_TAG_NO_RESPONSE:
+            case TLV_TAG_RESPONSE_TOUCH:
+                if (!name.isEmpty()) {
+                    HDEBUG(name << "requires touch");
+                    refreshableTokens.append(name);
+                    name.clear();
+                }
+                break;
+            }
+        }
+
         queueSignal(SignalOtpDataChanged);
+        if (iRefreshableTokens != refreshableTokens) {
+            iRefreshableTokens = refreshableTokens;
+            HDEBUG("Refreshable tokens" << iRefreshableTokens);
+            queueSignal(SignalRefreshableTokensChanged);
+        }
     }
 }
 
@@ -835,13 +885,14 @@ YubiKey::Private::updateTotpTimer()
             queueSignal(SignalTotpValidChanged);
         }
     } else {
+        queueSignal(SignalTotpCodesExpired);
         iTotpTimeLeft = 0;
         iTotpTimer->stop();
         if (iTotpValid) {
             iTotpValid = false;
             queueSignal(SignalTotpValidChanged);
         }
-        // Try to refresh the passwords
+        // Try to refresh the passwords (and fail if there's no card)
         submitCalculateAll();
     }
 
@@ -1803,6 +1854,12 @@ bool
 YubiKey::otpListFetched() const
 {
     return iPrivate->iOtpListFetched;
+}
+
+const QStringList
+YubiKey::refreshableTokens() const
+{
+    return iPrivate->iRefreshableTokens;
 }
 
 const QList<int>

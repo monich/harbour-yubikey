@@ -80,6 +80,7 @@ Page {
             }
         }
         onYubiKeyReset: thisPage.yubiKeyReset()
+        onTotpCodesExpired: otpListModel.totpCodesExpired()
     }
 
     Buzz {
@@ -290,7 +291,7 @@ Page {
                 id: yubiKeyIcon
 
                 anchors.centerIn: parent
-                timeLeft: otpListModel.haveTotpCodes ? yubiKey.totpTimeLeft : 0
+                timeLeft: otpListModel.haveExpiringTotpCodes ? yubiKey.totpTimeLeft : 0
                 visible: !yubiKeyAccessDenied
             }
 
@@ -329,6 +330,7 @@ Page {
                         yubiKeyId: yubiKey.yubiKeyId
                         authList: yubiKey.yubiKeyOtpList
                         authData: yubiKey.yubiKeyOtpData
+                        refreshableTokens: yubiKey.refreshableTokens
                     }
                     width: parent.width
                     height: Math.max(contentHeight, contentFlickable.height -
@@ -355,6 +357,8 @@ Page {
                         type: model.type
                         password: itemPassword
                         favorite: itemFavorite
+                        expired: model.expired
+                        refreshable: model.refreshable
                         markedForRefresh: itemMarkedForRefresh
                         markedForDeletion: itemMarkedForDeletion
                         totpValid: yubiKey.totpValid

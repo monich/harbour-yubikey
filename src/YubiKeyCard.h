@@ -54,8 +54,9 @@ class YubiKeyCard :
     Q_PROPERTY(QString yubiKeyVersion READ yubiKeyVersion NOTIFY yubiKeyVersionChanged)
     Q_PROPERTY(QString yubiKeyOtpList READ yubiKeyOtpList NOTIFY yubiKeyOtpListChanged)
     Q_PROPERTY(QString yubiKeyOtpData READ yubiKeyOtpData NOTIFY yubiKeyOtpDataChanged)
-    Q_PROPERTY(YubiKeyState yubiKeyState READ getYubiKeyState NOTIFY yubiKeyStateChanged)
+    Q_PROPERTY(YubiKeyState yubiKeyState READ yubiKeyState NOTIFY yubiKeyStateChanged)
     Q_PROPERTY(AuthAccess authAccess READ authAccess NOTIFY authAccessChanged)
+    Q_PROPERTY(QStringList refreshableTokens READ refreshableTokens NOTIFY refreshableTokensChanged)
     Q_PROPERTY(QList<int> operationIds READ operationIds NOTIFY operationIdsChanged)
     Q_PROPERTY(bool present READ present NOTIFY presentChanged)
     Q_PROPERTY(bool otpListFetched READ otpListFetched NOTIFY otpListFetchedChanged)
@@ -99,8 +100,9 @@ public:
     QString yubiKeyVersion() const;
     QString yubiKeyOtpList() const;
     QString yubiKeyOtpData() const;
+    YubiKeyState yubiKeyState() const;
     AuthAccess authAccess() const;
-    YubiKeyState getYubiKeyState() const;
+    QStringList refreshableTokens() const;
     QList<int> operationIds() const;
     bool present() const;
     bool otpListFetched() const;
@@ -123,11 +125,13 @@ Q_SIGNALS:
     void yubiKeyOtpDataChanged();
     void yubiKeyStateChanged();
     void authAccessChanged();
+    void refreshableTokensChanged();
     void operationIdsChanged();
     void presentChanged();
     void otpListFetchedChanged();
     void totpValidChanged();
     void totpTimeLeftChanged();
+    void totpCodesExpired();
     void accessKeyNotAccepted();
     void passwordChanged();
     void passwordRemoved();

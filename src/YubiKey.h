@@ -75,6 +75,7 @@ public:
     const QString yubiKeyVersionString() const;
     const QString otpListString() const;
     const QString otpDataString() const;
+    const QStringList refreshableTokens() const;
     const QList<int> operationIds() const;
     bool totpValid() const;
     int totpTimeLeft() const; // seconds
@@ -94,11 +95,13 @@ Q_SIGNALS:
     void otpDataChanged();
     void presentChanged();
     void authAccessChanged();
+    void refreshableTokensChanged();
     void totpValidChanged();
     void totpTimeLeftChanged();
     void operationIdsChanged();
     void operationFinished(int, bool);
     void accessKeyNotAccepted();
+    void totpCodesExpired();
     void passwordChanged();
     void passwordRemoved();
     void yubiKeyReset();

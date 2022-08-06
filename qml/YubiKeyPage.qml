@@ -141,7 +141,7 @@ Page {
                         } else {
                             var dialog = pageStack.previousPage(page)
                             page.waitForId(yubiKey.putToken(dialog.type, dialog.algorithm,
-                                dialog.name, dialog.secret, dialog.digits, dialog.counter))
+                                dialog.name, dialog.secret, dialog.digits, dialog.counter ? dialog.counter : 0))
                         }
                     } else {
                         page.tryAgain()

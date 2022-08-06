@@ -5,7 +5,7 @@ import harbour.yubikey 1.0
 Dialog {
     id: thisDialog
 
-    canAccept: counterField.acceptableInput && digitsField.acceptableInput && _acceptableSecret && name !== ""
+    canAccept: (!(type === YubiKeyCard.TypeHOTP) || counterField.acceptableInput) && digitsField.acceptableInput && _acceptableSecret && name !== ""
 
     property bool canScan: true
     property alias acceptText: header.acceptText

@@ -81,12 +81,12 @@
     <message id="yubikey-status-waiting_to_reset">
         <source>Touch the same YubiKey to reset it</source>
         <extracomment>Status label</extracomment>
-        <translation>Tryck på samma YubiKey för att återställa den</translation>
+        <translation>Håll telefonen mot samma YubiKey för att återställa den</translation>
     </message>
     <message id="yubikey-status-waiting_to_authorize">
         <source>Touch the same YubiKey to validate the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Tryck på samma YubiKey för att validera lösenordet</translation>
+        <translation>Håll telefonen mot samma YubiKey för att validera lösenordet</translation>
     </message>
     <message id="yubikey-info-nfc_not_supported">
         <source>NFC not supported</source>
@@ -101,7 +101,7 @@
     <message id="yubikey-info-touch_hint">
         <source>Touch a YubiKey NFC</source>
         <extracomment>Hint label</extracomment>
-        <translation>Tryck på en YubiKey NFC</translation>
+        <translation>Håll telefonen mot en YubiKey NFC</translation>
     </message>
     <message id="yubikey-info-version">
         <source>Version: %1</source>
@@ -161,22 +161,22 @@
     <message id="yubikey-wait-change_password">
         <source>Touch the same YubiKey to change the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Tryck på samma YubiKey för att ändra lösenordet</translation>
+        <translation>Håll telefonen mot samma YubiKey för att ändra lösenordet</translation>
     </message>
     <message id="yubikey-wait-set_password">
         <source>Touch the same YubiKey to set the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Tryck på samma YubiKey för att ange lösenordet</translation>
+        <translation>Håll telefonen mot samma YubiKey för att ange lösenordet</translation>
     </message>
     <message id="yubikey-wait-clear_password">
         <source>Touch the same YubiKey to clear the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Tryck på samma YubiKey för att ta bort lösenordet</translation>
+        <translation>Håll telefonen mot samma YubiKey för att ta bort lösenordet</translation>
     </message>
     <message id="yubikey-wait-put_token">
         <source>Touch YubiKey to save the token</source>
         <extracomment>Status label</extracomment>
-        <translation>Tryck på YubiKey för att spara token</translation>
+        <translation>Håll telefonen mot YubiKey för att spara token</translation>
     </message>
     <message id="yubikey-add_token-save">
         <source>Save</source>
@@ -281,7 +281,7 @@
     <message id="yubikey-item-touch_to_delete">
         <source>Touch YubiKey to delete this token</source>
         <extracomment>List item text</extracomment>
-        <translation>Tryck på YubiKey för att ta bort denna token</translation>
+        <translation>Håll telefonen mot YubiKey för att ta bort denna token</translation>
     </message>
     <message id="yubikey-scan-title">
         <source>Scan QR code</source>

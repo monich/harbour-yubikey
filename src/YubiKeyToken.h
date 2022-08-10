@@ -44,7 +44,6 @@
 #include <QDebug>
 #include <QMetaType>
 #include <QString>
-#include <QVariantMap>
 
 class YubiKeyToken
 {
@@ -85,17 +84,6 @@ public:
     const QByteArray secret() const;
     int digits() const;
     int counter() const;
-
-    static const QString KEY_VALID;         // valid
-    static const QString KEY_TYPE;          // type
-    static const QString KEY_LABEL;         // label
-    static const QString KEY_SECRET;        // secret (base32)
-    static const QString KEY_ISSUER;        // issuer
-    static const QString KEY_DIGITS;        // digits
-    static const QString KEY_COUNTER;       // counter
-    static const QString KEY_ALGORITHM;     // algorithm
-
-    QVariantMap toVariantMap() const;
 
     YubiKeyToken withType(YubiKeyTokenType) const Q_REQUIRED_RESULT;
     YubiKeyToken withAlgorithm(YubiKeyAlgorithm) const Q_REQUIRED_RESULT;

@@ -366,7 +366,6 @@ public:
     ModelData(const OtpParameters*);
 
     QVariant get(Role) const;
-    QVariantMap toVariantMap() const;
 
 public:
     bool iSelected;
@@ -408,12 +407,6 @@ YubiKeyImportModel::ModelData::get(
     case SelectedRole: return iSelected;
     }
     return QVariant();
-}
-
-QVariantMap
-YubiKeyImportModel::ModelData::toVariantMap() const
-{
-    return iToken.toVariantMap();
 }
 
 // ==========================================================================

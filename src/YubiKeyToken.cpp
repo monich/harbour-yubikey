@@ -94,15 +94,6 @@ YubiKeyToken::Private::~Private()
 // YubiKeyToken
 // ==========================================================================
 
-const QString YubiKeyToken::KEY_VALID("valid");
-const QString YubiKeyToken::KEY_TYPE("type");
-const QString YubiKeyToken::KEY_ALGORITHM("algorithm");
-const QString YubiKeyToken::KEY_LABEL("label");
-const QString YubiKeyToken::KEY_SECRET("secret");
-const QString YubiKeyToken::KEY_ISSUER("issuer");
-const QString YubiKeyToken::KEY_DIGITS("digits");
-const QString YubiKeyToken::KEY_COUNTER("counter");
-
 YubiKeyToken::YubiKeyToken(
     YubiKeyTokenType aType,
     YubiKeyAlgorithm aAlgorithm,
@@ -246,24 +237,6 @@ YubiKeyToken::operator!=(
     const YubiKeyToken& aToken) const
 {
     return !equals(aToken);
-}
-
-QVariantMap
-YubiKeyToken::toVariantMap() const
-{
-    QVariantMap map;
-
-    if (iPrivate) {
-        map.insert(KEY_VALID, true);
-        map.insert(KEY_TYPE, int(iPrivate->iType));
-        map.insert(KEY_ALGORITHM, int(iPrivate->iAlgorithm));
-        map.insert(KEY_LABEL, iPrivate->iLabel);
-        map.insert(KEY_ISSUER, iPrivate->iIssuer);
-        map.insert(KEY_SECRET, iPrivate->iSecretBase32);
-        map.insert(KEY_DIGITS, iPrivate->iDigits);
-        map.insert(KEY_COUNTER, iPrivate->iCounter);
-    }
-    return map;
 }
 
 YubiKeyToken

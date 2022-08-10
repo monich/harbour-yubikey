@@ -48,7 +48,6 @@
 #include "NfcAdapter.h"
 #include "NfcMode.h"
 #include "NfcSystem.h"
-#include "NfcTag.h"
 
 #include "HarbourDebug.h"
 #include "HarbourTheme.h"
@@ -79,7 +78,6 @@ static void register_types(const char* uri, int v1 = 1, int v2 = 0)
     REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeyUtil);
     REGISTER_TYPE(uri, v1, v2, HarbourSingleImageProvider);
     REGISTER_TYPE(uri, v1, v2, NfcMode);
-    REGISTER_TYPE(uri, v1, v2, NfcTag);
     REGISTER_TYPE(uri, v1, v2, YubiKeyCard);
     REGISTER_TYPE(uri, v1, v2, YubiKeyAuthListModel);
     REGISTER_TYPE(uri, v1, v2, YubiKeyImportModel);

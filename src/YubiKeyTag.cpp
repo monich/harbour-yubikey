@@ -1274,7 +1274,7 @@ void
 YubiKeyTag::Operation::lockFailed(
     const GError* aError)
 {
-    GERR(GERRMSG(aError));
+    GERR("%s", GERRMSG(aError));
 }
 
 void

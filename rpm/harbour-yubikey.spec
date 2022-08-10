@@ -1,6 +1,6 @@
 Name:           harbour-yubikey
 Summary:        YubiKey NFC OTP app
-Version:        1.0.3
+Version:        1.0.4
 Release:        1
 License:        BSD
 URL:            https://github.com/monich/harbour-yubikey

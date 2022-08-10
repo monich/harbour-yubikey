@@ -38,6 +38,7 @@
 #include "YubiKeyAuthListModel.h"
 #include "YubiKeyCard.h"
 #include "YubiKeyDefs.h"
+#include "YubiKeyImportModel.h"
 #include "YubiKeyRecognizer.h"
 #include "YubiKeySettings.h"
 #include "YubiKeyUtil.h"
@@ -52,7 +53,6 @@
 #include "HarbourDebug.h"
 #include "HarbourTheme.h"
 #include "HarbourSingleImageProvider.h"
-#include "HarbourSystemInfo.h"
 
 #include "gutil_log.h"
 
@@ -72,7 +72,6 @@ static void register_types(const char* uri, int v1 = 1, int v2 = 0)
     qmlRegisterUncreatableType<Class>(uri, v1, v2, #Class, \
     QString())
 
-    REGISTER_SINGLETON_TYPE(uri, v1, v2, HarbourSystemInfo);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, NfcAdapter);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, NfcSystem);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeyRecognizer);
@@ -83,6 +82,7 @@ static void register_types(const char* uri, int v1 = 1, int v2 = 0)
     REGISTER_TYPE(uri, v1, v2, NfcTag);
     REGISTER_TYPE(uri, v1, v2, YubiKeyCard);
     REGISTER_TYPE(uri, v1, v2, YubiKeyAuthListModel);
+    REGISTER_TYPE(uri, v1, v2, YubiKeyImportModel);
     REGISTER_TYPE(uri, v1, v2, QrCodeScanner);
 }
 

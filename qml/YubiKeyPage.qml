@@ -124,9 +124,15 @@ Page {
     Component {
         id: addTokenDialogComponent
 
-        YubiKeyAddTokenDialog {
+        YubiKeyTokenDialog {
             allowedOrientations: thisPage.allowedOrientations
             yubiKeyId: thisPage.yubiKeyId
+            //: Dialog title
+            //% "Add token"
+            dialogTitle: qsTrId("yubikey-add_token-title")
+            //: Dialog button
+            //% "Save"
+            acceptText: qsTrId("yubikey-add_token-save")
             acceptDestinationAction: PageStackAction.Push
             acceptDestination: waitPageComponent
             acceptDestinationProperties: {
@@ -140,13 +146,13 @@ Page {
                             pageStack.pop(thisPage)
                         } else {
                             var dialog = pageStack.previousPage(page)
-                            page.waitForId(yubiKey.putToken(dialog.type, dialog.algorithm,
-                                dialog.name, dialog.secret, dialog.digits, dialog.counter ? dialog.counter : 0))
+                            page.waitForId(yubiKey.putToken(dialog.type,
+                                dialog.algorithm, dialog.label, dialog.secret,
+                                dialog.digits, dialog.counter ? dialog.counter : 0))
                         }
                     } else {
                         page.tryAgain()
                     }
-
                 }
             }
         }
@@ -261,21 +267,47 @@ Page {
                 enabled: !NfcAdapter.targetPresent && _authorized
                 onEnabledChanged: pulleyMenu.updateVisibility()
                 onClicked: {
-                    pageStack.push("ScanPage.qml", {
+                    var page = pageStack.push("ScanPage.qml", {
                         "allowedOrientations": allowedOrientations
-                    }).done.connect(function(token) {
-                        if (token.valid) {
-                            pageStack.push(addTokenDialogComponent, {
-                                "type": token.type,
-                                "name": token.label,
-                                "secret": token.secret,
-                                "digits": token.digits,
-                                "counter": token.counter ? token.counter : 0,
-                                "algorithm": token.algorithm
-                            })
-                        } else {
-                            pageStack.push(addTokenDialogComponent)
-                        }
+                    })
+                    page.skip.connect(function() {
+                        pageStack.push(addTokenDialogComponent)
+                    })
+                    page.tokenDetected.connect(function(token) {
+                        pageStack.push(addTokenDialogComponent, {
+                            "type": token.type,
+                            "algorithm": token.algorithm,
+                            "label": token.label,
+                            "secret": token.secret,
+                            "digits": token.digits,
+                            "counter": token.counter
+                        })
+                    })
+                    page.tokensDetected.connect(function(model) {
+                        pageStack.push("YubiKeyImportDialog.qml", {
+                            "allowedOrientations": allowedOrientations,
+                            "model": model,
+                            "acceptDestinationAction": PageStackAction.Push,
+                            "acceptDestination": waitPageComponent,
+                            "acceptDestinationProperties": {
+                                "destinationPage": thisPage,
+                                //: Status label
+                                //% "Touch YubiKey to save the selected tokens"
+                                "text":  qsTrId("yubikey-wait-put_selected_tokens"),
+                                "complete": function(page,keyState,waitId,success) {
+                                    if (keyState === YubiKeyCard.YubiKeyStateReady) {
+                                        if (success) {
+                                            pageStack.pop(thisPage)
+                                        } else {
+                                            var dialog = pageStack.previousPage(page)
+                                            page.waitForId(yubiKey.putTokens(dialog.selectedTokens))
+                                        }
+                                    } else {
+                                        page.tryAgain()
+                                    }
+                                }
+                            }
+                        })
                     })
                 }
             }
@@ -475,6 +507,9 @@ Page {
                         function toggleFavorite() {
                             model.favorite = !model.favorite
                         }
+
+                        ListView.onAdd: AddAnimation { target: delegate }
+                        ListView.onRemove: RemoveAnimation { target: delegate }
                     }
 
                     InfoLabel {
@@ -516,6 +551,7 @@ Page {
                     text: yubiKeyId
                 }
             }
+
             VerticalScrollDecorator { }
         }
 

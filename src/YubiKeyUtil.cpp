@@ -35,8 +35,6 @@
  * any official policies, either expressed or implied.
  */
 
-#include "foil_util.h"
-
 #include "gutil_misc.h"
 
 #include "YubiKeyDefs.h"
@@ -46,41 +44,11 @@
 #include "HarbourBase32.h"
 #include "HarbourDebug.h"
 
-#include <QUrl>
 #include <QStandardPaths>
 
-#define TOKEN_TYPE_TOTP          "totp"
-#define TOKEN_TYPE_HOTP          "hotp"
-
-#define TOKEN_ALGORITHM_SHA1     "SHA1"
-#define TOKEN_ALGORITHM_SHA256   "SHA256"
-#define TOKEN_ALGORITHM_SHA512   "SHA512"
-
-#define TOKEN_KEY_TYPE "type"
-#define TOKEN_KEY_LABEL "label"
-#define TOKEN_KEY_SECRET "secret"
-#define TOKEN_KEY_ISSUER "issuer"
-#define TOKEN_KEY_DIGITS "digits"
-#define TOKEN_KEY_COUNTER "counter"
-#define TOKEN_KEY_ALGORITHM "algorithm"
-
-const QString YubiKeyUtil::KEY_VALID("valid");
-const QString YubiKeyUtil::KEY_TYPE(TOKEN_KEY_TYPE);
-const QString YubiKeyUtil::KEY_LABEL(TOKEN_KEY_LABEL);
-const QString YubiKeyUtil::KEY_SECRET(TOKEN_KEY_SECRET);
-const QString YubiKeyUtil::KEY_ISSUER(TOKEN_KEY_ISSUER);
-const QString YubiKeyUtil::KEY_DIGITS(TOKEN_KEY_DIGITS);
-const QString YubiKeyUtil::KEY_COUNTER(TOKEN_KEY_COUNTER);
-const QString YubiKeyUtil::KEY_ALGORITHM(TOKEN_KEY_ALGORITHM);
-
-const QString YubiKeyUtil::TYPE_TOTP(TOKEN_TYPE_TOTP);
-const QString YubiKeyUtil::TYPE_HOTP(TOKEN_TYPE_HOTP);
-
-const QString YubiKeyUtil::ALGORITHM_SHA1(TOKEN_ALGORITHM_SHA1);
-const QString YubiKeyUtil::ALGORITHM_SHA256(TOKEN_ALGORITHM_SHA256);
-const QString YubiKeyUtil::ALGORITHM_SHA512(TOKEN_ALGORITHM_SHA512);
-
-#define OTPAUTH_SCHEME "otpauth"
+const QString YubiKeyUtil::ALGORITHM_SHA1("SHA1");
+const QString YubiKeyUtil::ALGORITHM_SHA256("SHA256");
+const QString YubiKeyUtil::ALGORITHM_SHA512("SHA512");
 
 QDir
 YubiKeyUtil::configDir()
@@ -298,122 +266,24 @@ YubiKeyUtil::validAlgorithm(
     return YubiKeyAlgorithm_Unknown;
 }
 
+YubiKeyTokenType
+YubiKeyUtil::validType(
+    int aValue)
+{
+    switch (aValue) {
+    case YubiKeyTokenType_Unknown: break;
+    case YubiKeyTokenType_HOTP: // fallthrough
+    case YubiKeyTokenType_TOTP: // fallthrough
+        return (YubiKeyTokenType)aValue;
+    }
+    return YubiKeyTokenType_Unknown;
+}
+
 bool
 YubiKeyUtil::isValidBase32(
     const QString aBase32)
 {
     return HarbourBase32::isValidBase32(aBase32);
-}
-
-QVariantMap
-YubiKeyUtil::parseOtpAuthUri(
-    const QString aUri)
-{
-    const QByteArray uri(aUri.trimmed().toUtf8());
-    QVariantMap result;
-    FoilParsePos pos;
-
-    pos.ptr = (guint8*)uri.constData();
-    pos.end = pos.ptr + uri.size();
-
-    // Check scheme + type prefix
-    FoilBytes prefixBytes;
-
-    foil_bytes_from_string(&prefixBytes, OTPAUTH_SCHEME "://"
-        TOKEN_TYPE_TOTP "/");
-
-    if (foil_parse_skip_bytes(&pos, &prefixBytes)) {
-        result.insert(KEY_TYPE, YubiKeyTokenType_TOTP);
-    } else {
-        foil_bytes_from_string(&prefixBytes, OTPAUTH_SCHEME "://"
-            TOKEN_TYPE_HOTP "/");
-        if (foil_parse_skip_bytes(&pos, &prefixBytes)) {
-            result.insert(KEY_TYPE, YubiKeyTokenType_HOTP);
-        }
-    }
-
-    if (!result.isEmpty()) {
-        QByteArray label, secret, issuer, algorithm, digits, counter;
-
-        while (pos.ptr < pos.end && pos.ptr[0] != '?') {
-            label.append(*pos.ptr++);
-        }
-
-        FoilBytes secretTag;
-        FoilBytes issuerTag;
-        FoilBytes digitsTag;
-        FoilBytes counterTag;
-        FoilBytes algorithmTag;
-
-        foil_bytes_from_string(&secretTag, TOKEN_KEY_SECRET "=");
-        foil_bytes_from_string(&issuerTag, TOKEN_KEY_ISSUER "=");
-        foil_bytes_from_string(&digitsTag, TOKEN_KEY_DIGITS "=");
-        foil_bytes_from_string(&counterTag, TOKEN_KEY_COUNTER "=");
-        foil_bytes_from_string(&algorithmTag, TOKEN_KEY_ALGORITHM "=");
-
-        while (pos.ptr < pos.end) {
-            pos.ptr++;
-
-            QByteArray* value =
-                foil_parse_skip_bytes(&pos, &secretTag) ? &secret :
-                foil_parse_skip_bytes(&pos, &issuerTag) ? &issuer :
-                foil_parse_skip_bytes(&pos, &digitsTag) ? &digits :
-                foil_parse_skip_bytes(&pos, &counterTag) ? &counter :
-                foil_parse_skip_bytes(&pos, &algorithmTag) ? &algorithm :
-                Q_NULLPTR;
-
-            if (value) {
-                value->truncate(0);
-                while (pos.ptr < pos.end && pos.ptr[0] != '&') {
-                    value->append(*pos.ptr++);
-                }
-            } else {
-                while (pos.ptr < pos.end && pos.ptr[0] != '&') {
-                    pos.ptr++;
-                }
-            }
-        }
-
-        if (!secret.isEmpty()) {
-            const QByteArray bytes(HarbourBase32::fromBase32(QUrl::fromPercentEncoding(secret)));
-
-            if (!bytes.isEmpty()) {
-                const int alg = algorithm.isEmpty() ? YubiKeyAlgorithm_Default :
-                    algorithmFromName(QString::fromLatin1(algorithm));
-
-                if (alg != YubiKeyAlgorithm_Unknown) {
-                    int dig = DefaultDigits;
-
-                    if (!digits.isEmpty()) {
-                        bool ok;
-                        const int n = digits.toInt(&ok);
-
-                        if (ok && n >= MinDigits && n <= MaxDigits) {
-                            dig = n;
-                        }
-                    }
-
-                    if (!counter.isEmpty()) {
-                        bool ok;
-                        const quint64 n = counter.toULongLong(&ok);
-
-                        if (ok) {
-                            result.insert(KEY_COUNTER, n);
-                        }
-                    }
-
-                    result.insert(KEY_VALID, true);
-                    result.insert(KEY_DIGITS, dig);
-                    result.insert(KEY_ALGORITHM, alg);
-                    result.insert(KEY_SECRET, HarbourBase32::toBase32(bytes));
-                    result.insert(KEY_LABEL, QUrl::fromPercentEncoding(label));
-                    result.insert(KEY_ISSUER, QUrl::fromPercentEncoding(issuer));
-                    return result;
-                }
-            }
-        }
-    }
-    return QVariantMap();
 }
 
 QObject*

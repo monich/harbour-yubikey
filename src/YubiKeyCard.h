@@ -38,8 +38,8 @@
 #ifndef _YUBIKEY_CARD_H
 #define _YUBIKEY_CARD_H
 
-#include "YubiKeyTypes.h"
 #include "YubiKeyConstants.h"
+#include "YubiKeyToken.h"
 
 #include <QObject>
 #include <QString>
@@ -111,6 +111,7 @@ public:
 
     Q_INVOKABLE bool validOperationId(int);
     Q_INVOKABLE int putToken(int, int, const QString, const QString, int, int);
+    Q_INVOKABLE int putTokens(const QList<YubiKeyToken>);
     Q_INVOKABLE void refreshTokens(const QStringList);
     Q_INVOKABLE void deleteTokens(const QStringList);
     Q_INVOKABLE bool submitPassword(const QString, bool);

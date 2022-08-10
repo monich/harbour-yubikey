@@ -586,29 +586,39 @@ int
 YubiKeyCard::putToken(
     int aType,
     int aAlgorithm,
-    const QString aName,
+    const QString aLabel,
     const QString aSecret,
     int aDigits,
     int aCounter)
 {
     if (iPrivate->present()) {
+        const YubiKeyTokenType type = YubiKeyUtil::validType(aType);
         const YubiKeyAlgorithm alg = YubiKeyUtil::validAlgorithm(aAlgorithm);
         const QByteArray secret(HarbourBase32::fromBase32(aSecret));
 
-        if (alg != YubiKeyAlgorithm_Unknown && !secret.isEmpty()) {
-            YubiKey* key = iPrivate->iYubiKey;
+        if (type != YubiKeyTokenType_Unknown &&
+            alg != YubiKeyAlgorithm_Unknown &&
+            !secret.isEmpty()) {
+            QList<YubiKeyToken> list;
 
-            switch (aType) {
-            case YubiKeyTokenType_HOTP:
-                return key->putHotpToken(alg, aName, secret, aDigits, aCounter);
-            case YubiKeyTokenType_TOTP:
-                return key->putTotpToken(alg, aName, secret, aDigits);
-            case YubiKeyTokenType_Unknown:
-                break;
-            }
+            list.append(YubiKeyToken(type, alg, aLabel, QString(),
+                secret, aDigits, aCounter));
+            return iPrivate->iYubiKey->putTokens(list);
         }
     }
     return 0;
+}
+
+int
+YubiKeyCard::putTokens(
+    const QList<YubiKeyToken> aTokens)
+{
+    if (iPrivate->present()) {
+        return iPrivate->iYubiKey->putTokens(aTokens);
+    } else {
+        HDEBUG("Can't save tokens (YubiKey is not present)");
+        return 0;
+    }
 }
 
 void
@@ -644,9 +654,7 @@ YubiKeyCard::setPassword(
 {
     if (iPrivate->present()) {
         HDEBUG("Changing YubiKey password");
-        const int id = iPrivate->iYubiKey->setPassword(aPassword);
-        iPrivate->emitQueuedSignals();
-        return id;
+        return iPrivate->iYubiKey->setPassword(aPassword);
     } else {
         HDEBUG("Can't change password (YubiKey is not present)");
         return 0;
@@ -658,9 +666,7 @@ YubiKeyCard::reset()
 {
     if (iPrivate->present()) {
         HDEBUG("Resetting YubiKey");
-        const int id = iPrivate->iYubiKey->reset();
-        iPrivate->emitQueuedSignals();
-        return id;
+        return iPrivate->iYubiKey->reset();
     } else {
         HDEBUG("Can't reset (YubiKey is not present)");
         return 0;

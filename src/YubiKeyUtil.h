@@ -40,13 +40,12 @@
 
 #include "foil_types.h"
 
-#include "YubiKeyTypes.h"
+#include "YubiKeyToken.h"
 
 #include <QByteArray>
 #include <QDir>
 #include <QString>
 #include <QObject>
-#include <QVariantMap>
 
 class QQmlEngine;
 class QJSEngine;
@@ -60,22 +59,11 @@ class YubiKeyUtil:
 
 public:
     enum Constants {
-        DefaultDigits = 6,
-        MinDigits = 6,
-        MaxDigits = 8
+        // To expose these to QML:
+        DefaultDigits = YubiKeyToken::DefaultDigits,
+        MinDigits = YubiKeyToken::MinDigits,
+        MaxDigits = YubiKeyToken::MaxDigits
     };
-
-    static const QString KEY_VALID;         // valid
-    static const QString KEY_TYPE;          // type
-    static const QString KEY_LABEL;         // label
-    static const QString KEY_SECRET;        // secret
-    static const QString KEY_ISSUER;        // issuer
-    static const QString KEY_DIGITS;        // digits
-    static const QString KEY_COUNTER;       // counter
-    static const QString KEY_ALGORITHM;     // algorithm
-
-    static const QString TYPE_TOTP;
-    static const QString TYPE_HOTP;
 
     static const QString ALGORITHM_SHA1;
     static const QString ALGORITHM_SHA256;
@@ -109,8 +97,9 @@ public:
     static YubiKeyAlgorithm algorithmFromValue(uchar);
     static YubiKeyAlgorithm validAlgorithm(int);
 
+    static YubiKeyTokenType validType(int);
+
     Q_INVOKABLE static bool isValidBase32(const QString);
-    Q_INVOKABLE static QVariantMap parseOtpAuthUri(const QString);
 
     // Callback for qmlRegisterSingletonType<YubiKeyUtil>
     static QObject* createSingleton(QQmlEngine*, QJSEngine*);

@@ -5,21 +5,19 @@ import harbour.yubikey 1.0
 Dialog {
     id: thisDialog
 
-    canAccept: (!(type === YubiKeyCard.TypeHOTP) || counterField.acceptableInput) && digitsField.acceptableInput && _acceptableSecret && name !== ""
+    canAccept: ((type !== YubiKeyCard.TypeHOTP) || counterField.acceptableInput) && digitsField.acceptableInput && _acceptableSecret && label !== ""
 
-    property bool canScan: true
+    property string yubiKeyId
+    property alias dialogTitle: header.title
     property alias acceptText: header.acceptText
     property int type: YubiKeyCard.TypeTOTP
     property int algorithm: YubiKeyCard.HMAC_SHA1
-    property alias name: nameField.text
+    property alias label: labelField.text
     property alias secret: secretField.text
     property alias digits: digitsField.text
     property alias counter: counterField.text
 
-    property string yubiKeyId
-
     signal tokenAccepted(var dialog)
-    signal replacedWith(var page)
 
     readonly property bool _acceptableSecret: YubiKeyUtil.isValidBase32(secret)
 
@@ -30,28 +28,16 @@ Dialog {
 
         anchors.fill: parent
         contentHeight: column.height + Theme.paddingLarge
-        visible: opacity > 0
-        Behavior on opacity { FadeAnimation { } }
 
         Column {
             id: column
 
             width: parent.width
 
-            DialogHeader {
-                id: header
-
-                //: Dialog button
-                //% "Save"
-                acceptText: qsTrId("yubikey-add_token-save")
-
-                //: Dialog title
-                //% "Add token"
-                title: qsTrId("yubikey-add_token-title")
-            }
+            DialogHeader { id: header }
 
             TextField {
-                id: nameField
+                id: labelField
 
                 width: parent.width
                 //: Text field label (OTP label)
@@ -99,8 +85,8 @@ Dialog {
                     placeholderText: qsTrId("yubikey-token-digits-placeholder")
                     text: YubiKeyUtil.DefaultDigits
                     validator: IntValidator {
-                        bottom: 6
-                        top: 8
+                        bottom: YubiKeyUtil.MinDigits
+                        top: YubiKeyUtil.MaxDigits
                     }
 
                     EnterKey.iconSource: "image://theme/icon-m-enter-next"
@@ -159,7 +145,7 @@ Dialog {
                         //% "Time-based (TOTP)"
                         MenuItem { text: qsTrId("yubikey-token-type-totp") }
                     }
-                    // AuthType enum is off by 1
+                    // YubiKeyTokenType enum is off by 1
                     Component.onCompleted: currentIndex = type - 1
                     onCurrentIndexChanged: type = currentIndex + 1
                 }

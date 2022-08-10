@@ -86,7 +86,6 @@
 #define RESET_RESP_METHOD resetResp
 #define SET_CODE_RESP_METHOD setCodeResp
 #define REMOVE_CODE_RESP_METHOD removeCodeResp
-#define PUT_RESP_METHOD putResp
 
 class YubiKey::Private :
     public QObject,
@@ -197,6 +196,23 @@ public:
         int iNextName;
     };
 
+    // Delete
+    class PutOperation : public KeyOperation {
+    public:
+        PutOperation(YubiKey*, const QList<YubiKeyToken>);
+
+    protected:
+        bool startOperation() Q_DECL_OVERRIDE;
+
+    private:
+        bool putNext();
+        static void putResp(Operation*, const GUtilData*, guint, const GError*);
+
+    private:
+        const QList<YubiKeyToken> iTokens;
+        int iNextToken;
+    };
+
 public:
     static QMap<QByteArray,YubiKey*> gMap;
 
@@ -226,12 +242,10 @@ public:
     void verifyAuthorization();
     void recheckAuthorization();
     void authorized(YubiKeyAuthAccess);
-    void submit(YubiKeyTag::Operation*, bool aForceSelect = false);
+    int submit(YubiKeyTag::Operation*, bool aForceSelect = false);
     void submitUnique(YubiKeyTag::Operation*, bool aForceSelect = false);
     void requestList(bool aRightAway = false);
     void submitCalculateAll();
-    int submitPutHotpToken(YubiKeyAlgorithm, const QString, const QByteArray, int, int);
-    int submitPutTotpToken(YubiKeyAlgorithm, const QString, const QByteArray, int);
     int setPassword(const QString);
     bool submitPassword(const QString, bool);
     int reset();
@@ -258,7 +272,6 @@ public Q_SLOTS:
     YUBIKEY_TRANSMIT_RESP_SLOT(RESET_RESP_METHOD);
     YUBIKEY_TRANSMIT_RESP_SLOT(SET_CODE_RESP_METHOD);
     YUBIKEY_TRANSMIT_RESP_SLOT(REMOVE_CODE_RESP_METHOD);
-    YUBIKEY_TRANSMIT_RESP_SLOT(PUT_RESP_METHOD);
     void onTagStateChanged();
     void onYubiKeyIdChanged();
     void onYubiKeyVersionChanged();
@@ -841,13 +854,14 @@ YubiKey::Private::authorized(
     requestList();
 }
 
-void
+int
 YubiKey::Private::submit(
     YubiKeyTag::Operation* aOperation,  // Takes ownership
     bool aToFront)
 {
-    aOperation->submit(iTag, aToFront);
+    const int id = aOperation->submit(iTag, aToFront);
     aOperation->unref();
+    return id;
 }
 
 void
@@ -1143,144 +1157,6 @@ YubiKey::Private::setCodeResp(
         Q_EMIT (parentObject()->*(aSignal))();
     } else {
         REPORT_ERROR("SET_CODE", aSw, aError);
-    }
-}
-
-int
-YubiKey::Private::submitPutHotpToken(
-    YubiKeyAlgorithm aAlgorithm,
-    const QString aName,
-    const QByteArray aSecret,
-    int aDigits,
-    int aCounter)
-{
-    int id = 0;
-
-    if (!canTransmit()) {
-        HDEBUG("Can't send TOTP token");
-    } else {
-        // Put Data
-        //
-        // +-----------------+----------------------------------------------+
-        // | Name tag        | 0x71                                         |
-        // | Name length     | Length of name data, max 64 bytes            |
-        // | Name data       | Name                                         |
-        // +-----------------+----------------------------------------------+
-        // | Key tag         | 0x73                                         |
-        // | Key length      | Length of key data + 2                       |
-        // | Key algorithm   | High 4 bits is type, low 4 bits is algorithm |
-        // | Digits          | Number of digits in OATH code                |
-        // | Key data        | Key                                          |
-        // +-----------------+----------------------------------------------+
-        // | Property tag(o) | 0x78                                         |
-        // | Property(o)     | Property byte                                |
-        // +-----------------+----------------------------------------------+
-        // | IMF tag(o)      | 0x7a (only valid for HOTP)                   |
-        // | IMF length(o)   | Length of imf data, always 4 bytes           |
-        // | IMF data(o)     | Imf                                          |
-        // +-----------------+----------------------------------------------+
-        const QByteArray nameUtf8(nameToUtf8(aName));
-
-        // YubiKey seems to require at least 14 bytes of key data
-        // Pad the key with zeros if necessary
-        const int keySize = qMax(aSecret.size(), (int) MinKeySize);
-        const int padding = keySize - aSecret.size();
-        const guint32 imf = htobe32(aCounter);
-
-        NfcIsoDepApdu cmd = CMD_PUT_TEMPLATE;
-        QByteArray data;
-
-        data.reserve(nameUtf8.size() + keySize + 16);
-        YubiKeyUtil::appendTLV(&data, TLV_TAG_NAME, nameUtf8);
-        data.append((char)TLV_TAG_KEY);
-        data.append((char)(keySize + 2));
-        data.append((char)(TYPE_HOTP | YubiKeyUtil::algorithmValue(aAlgorithm)));
-        data.append((char)aDigits);
-        data.append(aSecret);
-        for (int i = 0; i < padding; i++) {
-            data.append((char)0);
-        }
-        data.append((char)TLV_TAG_PROPERTY);
-        data.append((char)PROP_REQUIRE_TOUCH);
-        YubiKeyUtil::appendTLV(&data, TLV_TAG_IMF, sizeof(imf), &imf);
-
-        cmd.data.bytes = (const guint8*)data.constData();
-        cmd.data.size = data.size();
-        id = iTag->transmit(&cmd, this, G_STRINGIFY(PUT_RESP_METHOD), iCancel);
-        DUMP_CMD("PUT", cmd, id);
-    }
-    return id;
-}
-
-int
-YubiKey::Private::submitPutTotpToken(
-    YubiKeyAlgorithm aAlgorithm,
-    const QString aName,
-    const QByteArray aSecret,
-    int aDigits)
-{
-    int id = 0;
-
-    if (!canTransmit()) {
-        HDEBUG("Can't send TOTP token");
-    } else {
-        // Put Data
-        //
-        // +-----------------+----------------------------------------------+
-        // | Name tag        | 0x71                                         |
-        // | Name length     | Length of name data, max 64 bytes            |
-        // | Name data       | Name                                         |
-        // +-----------------+----------------------------------------------+
-        // | Key tag         | 0x73                                         |
-        // | Key length      | Length of key data + 2                       |
-        // | Key algorithm   | High 4 bits is type, low 4 bits is algorithm |
-        // | Digits          | Number of digits in OATH code                |
-        // | Key data        | Key                                          |
-        // +-----------------+----------------------------------------------+
-        // | Property tag(o) | 0x78                                         |
-        // | Property(o)     | Property byte                                |
-        // +-----------------+----------------------------------------------+
-
-        // YubiKey seems to require at least 14 bytes of key data
-        // Pad the key with zeros if necessary
-        const int keySize = qMax(aSecret.size(), (int) MinKeySize);
-        const int padding = keySize - aSecret.size();
-
-        const QByteArray nameUtf8(nameToUtf8(aName));
-        NfcIsoDepApdu cmd = CMD_PUT_TEMPLATE;
-        QByteArray data;
-
-        data.reserve(nameUtf8.size() + keySize + 8);
-        YubiKeyUtil::appendTLV(&data, TLV_TAG_NAME, nameUtf8);
-        data.append((char)TLV_TAG_KEY);
-        data.append((char)(keySize + 2));
-        data.append((char)(TYPE_TOTP | YubiKeyUtil::algorithmValue(aAlgorithm)));
-        data.append((char)aDigits);
-        data.append(aSecret);
-        for (int i = 0; i < padding; i++) {
-            data.append((char)0);
-        }
-
-        cmd.data.bytes = (const guint8*)data.constData();
-        cmd.data.size = data.size();
-        id = iTag->transmit(&cmd, this, G_STRINGIFY(PUT_RESP_METHOD), iCancel);
-        DUMP_CMD("PUT", cmd, id);
-    }
-    return id;
-}
-
-void
-YubiKey::Private::PUT_RESP_METHOD(
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
-{
-    if (!aError && aSw == RC_OK) {
-        HDEBUG("PUT ok" << qPrintable(YubiKeyUtil::toHex(aResp)));
-        requestList();
-        emitQueuedSignals();
-    } else {
-        REPORT_ERROR("PUT", aSw, aError);
     }
 }
 
@@ -1734,6 +1610,132 @@ YubiKey::Private::DeleteOperation::deleteResp(
 }
 
 // ==========================================================================
+// YubiKey::Private::PutOperation
+// ==========================================================================
+
+YubiKey::Private::PutOperation::PutOperation(
+    YubiKey* aKey,
+    const QList<YubiKeyToken> aTokens) :
+    KeyOperation("Put", aKey),
+    iTokens(aTokens),
+    iNextToken(0)
+{
+}
+
+bool
+YubiKey::Private::PutOperation::startOperation()
+{
+    return putNext();
+}
+
+bool
+YubiKey::Private::PutOperation::putNext()
+{
+    if (iNextToken < iTokens.count()) {
+        // Put Data
+        //
+        // +-----------------+----------------------------------------------+
+        // | Name tag        | 0x71                                         |
+        // | Name length     | Length of name data, max 64 bytes            |
+        // | Name data       | Name                                         |
+        // +-----------------+----------------------------------------------+
+        // | Key tag         | 0x73                                         |
+        // | Key length      | Length of key data + 2                       |
+        // | Key algorithm   | High 4 bits is type, low 4 bits is algorithm |
+        // | Digits          | Number of digits in OATH code                |
+        // | Key data        | Key                                          |
+        // +-----------------+----------------------------------------------+
+        // | Property tag(o) | 0x78                                         |
+        // | Property(o)     | Property byte                                |
+        // +-----------------+----------------------------------------------+
+        // | IMF tag(o)      | 0x7a (only valid for HOTP)                   |
+        // | IMF length(o)   | Length of imf data, always 4 bytes           |
+        // | IMF data(o)     | Imf                                          |
+        // +-----------------+----------------------------------------------+
+
+        const YubiKeyToken token(iTokens.at(iNextToken));
+
+        // YubiKey seems to require at least 14 bytes of key data
+        // Pad the key with zeros if necessary
+        const QByteArray secret(token.secret());
+        const int keySize = qMax(secret.size(), (int) MinKeySize);
+        const int padding = keySize - secret.size();
+        const QByteArray nameUtf8(nameToUtf8(token.label()));
+        QByteArray data;
+        uchar type;
+
+        if (token.type() == YubiKeyTokenType_HOTP) {
+            type = TYPE_HOTP;
+            data.reserve(nameUtf8.size() + keySize + 16);
+        } else {
+            type = TYPE_TOTP;
+            data.reserve(nameUtf8.size() + keySize + 8);
+        }
+
+        YubiKeyUtil::appendTLV(&data, TLV_TAG_NAME, nameUtf8);
+        data.append((char)TLV_TAG_KEY);
+        data.append((char)(keySize + 2));
+        data.append((char)(type | YubiKeyUtil::algorithmValue(token.algorithm())));
+        data.append((char)token.digits());
+        data.append(secret);
+        for (int i = 0; i < padding; i++) {
+            data.append((char)0);
+        }
+
+        if (token.type() == YubiKeyTokenType_HOTP) {
+            const guint32 imf = htobe32(token.counter());
+
+            data.append((char)TLV_TAG_PROPERTY);
+            data.append((char)PROP_REQUIRE_TOUCH);
+            YubiKeyUtil::appendTLV(&data, TLV_TAG_IMF, sizeof(imf), &imf);
+        }
+
+        NfcIsoDepApdu putCmd = CMD_PUT_TEMPLATE;
+
+        putCmd.data.bytes = (const guint8*)data.constData();
+        putCmd.data.size = data.size();
+        HDEBUG("PUT" << iNextToken << token);
+        if (transmit(&putCmd, putResp)) {
+            iNextToken++;
+            return true;
+        }
+    }
+    return false;
+}
+
+void
+YubiKey::Private::PutOperation::putResp(
+    Operation* aOperation,
+    const GUtilData*,
+    guint aSw,
+    const GError* aError)
+{
+    PutOperation* self = (PutOperation*)aOperation;
+    YubiKey* key = self->iYubiKey;
+    YubiKey::Private* priv = key->iPrivate;
+
+    if (!aError) {
+#if HARBOUR_DEBUG
+        if (aSw == RC_OK) {
+            HDEBUG("PUT ok");
+        } else{
+            HDEBUG("PUT error" << hex << aSw);
+        }
+#endif // HARBOUR_DEBUG
+        // Try the next one anyway
+        if (self->putNext()) {
+            // Not finished yet
+            return;
+        } else {
+            priv->requestList(true);
+        }
+    } else {
+        REPORT_ERROR("PUT", aSw, aError);
+    }
+    self->finished(!aError);
+}
+
+// ==========================================================================
 // YubiKey
 // ==========================================================================
 
@@ -1907,34 +1909,14 @@ YubiKey::deleteTokens(
 }
 
 int
-YubiKey::putHotpToken(
-    YubiKeyAlgorithm aAlgorithm,
-    const QString aName,
-    const QByteArray aSecret,
-    int aDigits,
-    int aCounter)
+YubiKey::putTokens(
+    const QList<YubiKeyToken> aTokens)
 {
-    if (aDigits >= YubiKeyUtil::MinDigits &&
-        aDigits <= YubiKeyUtil::MaxDigits) {
-        return iPrivate->submitPutHotpToken(aAlgorithm, aName, aSecret,
-            aDigits, aCounter);
+    if (!aTokens.isEmpty() && iPrivate->canTransmit()) {
+        HDEBUG(aTokens);
+        return iPrivate->submit(new Private::PutOperation(this, aTokens));
     }
-    return false;
-}
-
-int
-YubiKey::putTotpToken(
-    YubiKeyAlgorithm aAlgorithm,
-    const QString aName,
-    const QByteArray aSecret,
-    int aDigits)
-{
-    if (aDigits >= YubiKeyUtil::MinDigits &&
-        aDigits <= YubiKeyUtil::MaxDigits) {
-        return iPrivate->submitPutTotpToken(aAlgorithm, aName, aSecret,
-            aDigits);
-    }
-    return false;
+    return 0;
 }
 
 bool

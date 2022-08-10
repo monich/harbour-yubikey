@@ -35,80 +35,54 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_H
-#define _YUBIKEY_H
+#ifndef _YUBIKEY_IMPORT_MODEL_H
+#define _YUBIKEY_IMPORT_MODEL_H
 
 #include "YubiKeyToken.h"
 
-#include <QByteArray>
-#include <QDebug>
-#include <QList>
-#include <QObject>
-#include <QString>
-#include <QStringList>
+#include <QAbstractListModel>
 
-class YubiKey :
-    public QObject
+class YubiKeyImportModel :
+    public QAbstractListModel
 {
     Q_OBJECT
-    Q_DISABLE_COPY(YubiKey)
-
-private:
-    YubiKey(const QByteArray);
-    ~YubiKey();
+    Q_DISABLE_COPY(YubiKeyImportModel)
+    Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
+    Q_PROPERTY(QString otpUri READ otpUri WRITE setOtpUri NOTIFY otpUriChanged)
+    Q_PROPERTY(QList<YubiKeyToken> selectedTokens READ selectedTokens NOTIFY selectedTokensChanged)
+    Q_PROPERTY(bool haveSelectedTokens READ haveSelectedTokens NOTIFY haveSelectedTokensChanged)
 
 public:
-    static YubiKey* get(const QByteArray);
-    void put() { unref(); }
+    YubiKeyImportModel(QObject* aParent = Q_NULLPTR);
+    ~YubiKeyImportModel();
 
-    YubiKey* ref();
-    void unref();
+    QString otpUri() const;
+    void setOtpUri(const QString);
 
-    const QByteArray yubiKeyId() const;
-    const QByteArray yubiKeyVersion() const;
-    const QByteArray otpList() const;
-    const QByteArray otpData() const;
-    bool otpListFetched() const;
-    bool present() const;
-    YubiKeyAuthAccess authAccess() const;
+    QList<YubiKeyToken> selectedTokens() const;
+    bool haveSelectedTokens() const;
 
-    const QString yubiKeyIdString() const;
-    const QString yubiKeyVersionString() const;
-    const QString otpListString() const;
-    const QString otpDataString() const;
-    const QStringList refreshableTokens() const;
-    const QList<int> operationIds() const;
-    bool totpValid() const;
-    int totpTimeLeft() const; // seconds
+    Q_INVOKABLE YubiKeyToken getToken(int) const;
+    Q_INVOKABLE void setToken(int, int, int, const QString, const QString, const QString, int, int);
 
-    int putTokens(const QList<YubiKeyToken>);
-    bool submitPassword(const QString, bool);
-    void refreshTokens(const QStringList);
-    void deleteTokens(const QStringList);
-    int setPassword(const QString);
-    int reset();
+    // QAbstractItemModel
+    Qt::ItemFlags flags(const QModelIndex&) const Q_DECL_OVERRIDE;
+    QHash<int,QByteArray> roleNames() const Q_DECL_OVERRIDE;
+    int rowCount(const QModelIndex& aParent = QModelIndex()) const Q_DECL_OVERRIDE;
+    QVariant data(const QModelIndex&, int) const Q_DECL_OVERRIDE;
+    bool setData(const QModelIndex&, const QVariant&, int) Q_DECL_OVERRIDE;
 
 Q_SIGNALS:
-    void yubiKeyVersionChanged();
-    void otpListFetchedChanged();
-    void otpListChanged();
-    void otpDataChanged();
-    void presentChanged();
-    void authAccessChanged();
-    void refreshableTokensChanged();
-    void totpValidChanged();
-    void totpTimeLeftChanged();
-    void operationIdsChanged();
-    void operationFinished(int, bool);
-    void accessKeyNotAccepted();
-    void totpCodesExpired();
-    void passwordChanged();
-    void passwordRemoved();
-    void yubiKeyReset();
+    void countChanged();
+    void otpUriChanged();
+    void selectedTokensChanged();
+    void haveSelectedTokensChanged();
 
 private:
+    class OtpParameters;
+    class ModelData;
     class Private;
     Private* iPrivate;
 };
 
-#endif // _YUBIKEY_H
+#endif // _YUBIKEY_IMPORT_MODEL_H

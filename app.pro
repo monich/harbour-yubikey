@@ -69,9 +69,11 @@ HEADERS += \
     src/YubiKeyCard.h \
     src/YubiKeyDefs.h \
     src/YubiKeyConstants.h \
+    src/YubiKeyImportModel.h \
     src/YubiKeyRecognizer.h \
     src/YubiKeySettings.h \
     src/YubiKeyTag.h \
+    src/YubiKeyToken.h \
     src/YubiKeyTypes.h \
     src/YubiKeyUtil.h
 
@@ -83,8 +85,10 @@ SOURCES += \
     src/YubiKeyAuth.cpp \
     src/YubiKeyAuthListModel.cpp \
     src/YubiKeyCard.cpp \
+    src/YubiKeyImportModel.cpp \
     src/YubiKeyRecognizer.cpp \
     src/YubiKeyTag.cpp \
+    src/YubiKeyToken.cpp \
     src/YubiKeySettings.cpp \
     src/YubiKeyUtil.cpp
 
@@ -235,13 +239,15 @@ INCLUDEPATH += \
 HEADERS += \
     $${HARBOUR_LIB_INCLUDE}/HarbourBase32.h \
     $${HARBOUR_LIB_INCLUDE}/HarbourDebug.h \
+    $${HARBOUR_LIB_INCLUDE}/HarbourProtoBuf.h \
     $${HARBOUR_LIB_INCLUDE}/HarbourSingleImageProvider.h \
-    $${HARBOUR_LIB_INCLUDE}/HarbourSystemInfo.h
+    $${HARBOUR_LIB_INCLUDE}/HarbourUtil.h
 
 SOURCES += \
     $${HARBOUR_LIB_SRC}/HarbourBase32.cpp \
+    $${HARBOUR_LIB_SRC}/HarbourProtoBuf.cpp \
     $${HARBOUR_LIB_SRC}/HarbourSingleImageProvider.cpp \
-    $${HARBOUR_LIB_SRC}/HarbourSystemInfo.cpp
+    $${HARBOUR_LIB_SRC}/HarbourUtil.cpp
 
 HARBOUR_QML_COMPONENTS = \
     $${HARBOUR_LIB_QML}/HarbourFitLabel.qml \

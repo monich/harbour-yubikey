@@ -78,6 +78,11 @@
         <extracomment>Context menu item</extracomment>
         <translation>Remove from cover</translation>
     </message>
+    <message id="yubikey-menu-edit">
+        <source>Edit</source>
+        <extracomment>Generic menu item</extracomment>
+        <translation>Edit</translation>
+    </message>
     <message id="yubikey-status-waiting_to_reset">
         <source>Touch the same YubiKey to reset it</source>
         <extracomment>Status label</extracomment>
@@ -177,6 +182,11 @@
         <source>Touch YubiKey to save the token</source>
         <extracomment>Status label</extracomment>
         <translation>Touch YubiKey to save the token</translation>
+    </message>
+    <message id="yubikey-wait-put_selected_tokens">
+        <source>Touch YubiKey to save the selected tokens</source>
+        <extracomment>Status label</extracomment>
+        <translation>Touch YubiKey to save the selected tokens</translation>
     </message>
     <message id="yubikey-add_token-save">
         <source>Save</source>
@@ -307,6 +317,11 @@
         <source>Resetting the YubiKey irreversibly removes all secrets stored in it. This action cannot be undone. Are you sure that you really want to do it?</source>
         <extracomment>Warning text</extracomment>
         <translation>Resetting the YubiKey irreversibly removes all secrets stored in it. This action cannot be undone. Are you sure that you really want to do it?</translation>
+    </message>
+    <message id="yubikey-select_dialog-title">
+        <source>Select tokens</source>
+        <extracomment>Dialog title</extracomment>
+        <translation>Select tokens</translation>
     </message>
 </context>
 </TS>

@@ -78,6 +78,11 @@
         <extracomment>Context menu item</extracomment>
         <translation>Убрать с обложки</translation>
     </message>
+    <message id="yubikey-menu-edit">
+        <source>Edit</source>
+        <extracomment>Generic menu item</extracomment>
+        <translation>Изменить</translation>
+    </message>
     <message id="yubikey-status-waiting_to_reset">
         <source>Touch the same YubiKey to reset it</source>
         <extracomment>Status label</extracomment>
@@ -177,6 +182,11 @@
         <source>Touch YubiKey to save the token</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для записи кода</translation>
+    </message>
+    <message id="yubikey-wait-put_selected_tokens">
+        <source>Touch YubiKey to save the selected tokens</source>
+        <extracomment>Status label</extracomment>
+        <translation>Поднесите тот же самый YubiKey для записи выбранных кодов</translation>
     </message>
     <message id="yubikey-add_token-save">
         <source>Save</source>
@@ -286,7 +296,7 @@
     <message id="yubikey-scan-title">
         <source>Scan QR code</source>
         <extracomment>Page title (suggestion to scan QR code)</extracomment>
-        <translation>Отсканировать QR-код</translation>
+        <translation>Отсканируйте QR-код</translation>
     </message>
     <message id="yubikey-scan-zoom_label">
         <source>Zoom</source>
@@ -307,6 +317,11 @@
         <source>Resetting the YubiKey irreversibly removes all secrets stored in it. This action cannot be undone. Are you sure that you really want to do it?</source>
         <extracomment>Warning text</extracomment>
         <translation>Сброс YubiKey безвозвратно уничтожает все коды, которые в нём хранились. Всё будет утеряно навсегда, восстановить ничего не получится. Вы уверены, что действительно этого хотите?</translation>
+    </message>
+    <message id="yubikey-select_dialog-title">
+        <source>Select tokens</source>
+        <extracomment>Dialog title</extracomment>
+        <translation>Выберите коды для записи на ключ</translation>
     </message>
 </context>
 </TS>

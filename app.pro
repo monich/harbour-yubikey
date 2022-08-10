@@ -138,8 +138,7 @@ HEADERS += \
 SOURCES += \
     $${LIBGLIBUTIL_SRC}/gutil_log.c \
     $${LIBGLIBUTIL_SRC}/gutil_misc.c \
-    $${LIBGLIBUTIL_SRC}/gutil_strv.c \
-    $${LIBGLIBUTIL_SRC}/gutil_timenotify.c
+    $${LIBGLIBUTIL_SRC}/gutil_strv.c
 
 # libgnfcdc
 

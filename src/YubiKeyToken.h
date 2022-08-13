@@ -85,14 +85,14 @@ public:
     int digits() const;
     int counter() const;
 
-    YubiKeyToken withType(YubiKeyTokenType) const Q_REQUIRED_RESULT;
-    YubiKeyToken withAlgorithm(YubiKeyAlgorithm) const Q_REQUIRED_RESULT;
-    YubiKeyToken withLabel(const QString) const Q_REQUIRED_RESULT;
-    YubiKeyToken withIssuer(const QString) const Q_REQUIRED_RESULT;
-    YubiKeyToken withSecret(const QByteArray) const Q_REQUIRED_RESULT;
-    YubiKeyToken withSecretBase32(const QString) const Q_REQUIRED_RESULT;
-    YubiKeyToken withDigits(int) const Q_REQUIRED_RESULT;
-    YubiKeyToken withCounter(int) const Q_REQUIRED_RESULT;
+    Q_REQUIRED_RESULT YubiKeyToken withType(YubiKeyTokenType) const;
+    Q_REQUIRED_RESULT YubiKeyToken withAlgorithm(YubiKeyAlgorithm) const;
+    Q_REQUIRED_RESULT YubiKeyToken withLabel(const QString) const;
+    Q_REQUIRED_RESULT YubiKeyToken withIssuer(const QString) const;
+    Q_REQUIRED_RESULT YubiKeyToken withSecret(const QByteArray) const;
+    Q_REQUIRED_RESULT YubiKeyToken withSecretBase32(const QString) const;
+    Q_REQUIRED_RESULT YubiKeyToken withDigits(int) const;
+    Q_REQUIRED_RESULT YubiKeyToken withCounter(int) const;
 
 private:
     class Private;

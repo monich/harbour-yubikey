@@ -76,6 +76,15 @@ desktop-file-install --delete-original \
   --dir %{buildroot}%{_datadir}/applications \
    %{buildroot}%{_datadir}/applications/*.desktop
 
+%postun
+if [ "$1" == 0 ] ; then
+  for d in $(getent passwd | cut -d: -f6) ; do
+    if [ "$d" != "" ] && [ "$d" != "/" ] && [ -d "$d/.local/share/harbour-yubikey" ] ; then
+      rm -fr "$d/.local/share/harbour-yubikey" ||:
+    fi
+  done
+fi
+
 %files
 %defattr(-,root,root,-)
 %{_bindir}/%{name}

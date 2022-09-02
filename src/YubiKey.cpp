@@ -56,6 +56,7 @@
 // s(SignalName,signalName)
 #define YUBIKEY_SIGNALS(s) \
     s(YubiKeyVersion,yubiKeyVersion) \
+    s(YubiKeySerial,yubiKeySerial) \
     s(OtpListFetched,otpListFetched) \
     s(OtpList,otpList) \
     s(OtpData,otpData) \
@@ -255,6 +256,7 @@ public:
     void updateAuthAccess(YubiKeyAuthAccess);
     void updateAuthAlgorithm();
     void updateYubiKeyVersion();
+    void updateYubiKeySerial();
     void updateOperationIds();
     void calculateAllOk(const QByteArray);
     void updateOtpList(const QByteArray);
@@ -275,6 +277,7 @@ public Q_SLOTS:
     void onTagStateChanged();
     void onYubiKeyIdChanged();
     void onYubiKeyVersionChanged();
+    void onYubiKeySerialChanged();
     void onYubiKeyAuthAlgorithmChanged();
     void onYubiKeyAuthChallengeChanged();
     void onOperationIdsChanged();
@@ -297,6 +300,7 @@ public:
     const QString iYubiKeyIdString;
     QByteArray iYubiKeyVersion;
     QString iYubiKeyVersionString;
+    uint iYubiKeySerial;
     QByteArray iOtpList;
     QString iOtpListString;
     QByteArray iOtpData;
@@ -360,6 +364,7 @@ YubiKey::Private::Private(
     iAuthAccess(YubiKeyAuthAccessUnknown),
     iYubiKeyId(aYubiKeyId),
     iYubiKeyIdString(YubiKeyUtil::toHex(aYubiKeyId)),
+    iYubiKeySerial(0),
     iOtpListFetched(false),
     iTotpTimer(new QTimer(this)),
     iLastRequestedPeriod(0),
@@ -554,6 +559,13 @@ YubiKey::Private::onYubiKeyVersionChanged()
 }
 
 void
+YubiKey::Private::onYubiKeySerialChanged()
+{
+    updateYubiKeySerial();
+    emitQueuedSignals();
+}
+
+void
 YubiKey::Private::onYubiKeyAuthAlgorithmChanged()
 {
     updateAuthAlgorithm();
@@ -625,6 +637,9 @@ YubiKey::Private::updatePath()
                 SIGNAL(yubiKeyVersionChanged()),
                 SLOT(onYubiKeyVersionChanged()));
             connect(iTag,
+                SIGNAL(yubiKeySerialChanged()),
+                SLOT(onYubiKeySerialChanged()));
+            connect(iTag,
                 SIGNAL(yubiKeyAuthAlgorithmChanged()),
                 SLOT(onYubiKeyAuthAlgorithmChanged()));
             connect(iTag,
@@ -679,6 +694,20 @@ YubiKey::Private::updateYubiKeyVersion()
             iYubiKeyVersionString = YubiKeyUtil::versionToString(version);
             HDEBUG(qPrintable(iYubiKeyVersionString));
             queueSignal(SignalYubiKeyVersionChanged);
+        }
+    }
+}
+
+void
+YubiKey::Private::updateYubiKeySerial()
+{
+    if (validTag()) {
+        const uint serial(iTag->yubiKeySerial());
+
+        if (iYubiKeySerial != serial) {
+            iYubiKeySerial = serial;
+            HDEBUG(iYubiKeySerial);
+            queueSignal(SignalYubiKeySerialChanged);
         }
     }
 }
@@ -828,6 +857,7 @@ YubiKey::Private::updateTagState()
     updateOperationIds();
     if (present) {
         updateAuthAlgorithm();
+        updateYubiKeySerial();
         updateYubiKeyVersion();
         verifyAuthorization();
     }
@@ -1826,6 +1856,12 @@ const QString
 YubiKey::yubiKeyVersionString() const
 {
     return iPrivate->iYubiKeyVersionString;
+}
+
+uint
+YubiKey::yubiKeySerial() const
+{
+    return iPrivate->iYubiKeySerial;
 }
 
 const QByteArray

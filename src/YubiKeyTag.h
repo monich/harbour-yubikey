@@ -115,6 +115,7 @@ public:
     const QByteArray yubiKeyVersion() const;
     const QByteArray yubiKeyAuthChallenge() const;
     YubiKeyAlgorithm yubiKeyAuthAlgorithm() const;
+    uint yubiKeySerial() const;
     bool hasAuthChallenge() const;
     const QList<int> operationIds() const;
 
@@ -134,6 +135,7 @@ Q_SIGNALS:
     void yubiKeyVersionChanged();
     void yubiKeyAuthChallengeChanged();
     void yubiKeyAuthAlgorithmChanged();
+    void yubiKeySerialChanged();
     void operationIdsChanged();
     void operationFinished(int, bool);
 

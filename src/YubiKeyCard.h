@@ -51,6 +51,7 @@ class YubiKeyCard :
     Q_OBJECT
     Q_DISABLE_COPY(YubiKeyCard)
     Q_PROPERTY(QString yubiKeyId READ yubiKeyId WRITE setYubiKeyId NOTIFY yubiKeyIdChanged)
+    Q_PROPERTY(uint yubiKeySerial READ yubiKeySerial NOTIFY yubiKeySerialChanged)
     Q_PROPERTY(QString yubiKeyVersion READ yubiKeyVersion NOTIFY yubiKeyVersionChanged)
     Q_PROPERTY(QString yubiKeyOtpList READ yubiKeyOtpList NOTIFY yubiKeyOtpListChanged)
     Q_PROPERTY(QString yubiKeyOtpData READ yubiKeyOtpData NOTIFY yubiKeyOtpDataChanged)
@@ -97,6 +98,7 @@ public:
 
     void setYubiKeyId(const QString);
     QString yubiKeyId() const;
+    uint yubiKeySerial() const;
     QString yubiKeyVersion() const;
     QString yubiKeyOtpList() const;
     QString yubiKeyOtpData() const;
@@ -121,6 +123,7 @@ public:
 Q_SIGNALS:
     void yubiKeyReset();
     void yubiKeyIdChanged();
+    void yubiKeySerialChanged();
     void yubiKeyVersionChanged();
     void yubiKeyOtpListChanged();
     void yubiKeyOtpDataChanged();

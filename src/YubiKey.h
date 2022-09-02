@@ -71,6 +71,7 @@ public:
     bool otpListFetched() const;
     bool present() const;
     YubiKeyAuthAccess authAccess() const;
+    uint yubiKeySerial() const;
 
     const QString yubiKeyIdString() const;
     const QString yubiKeyVersionString() const;
@@ -89,6 +90,7 @@ public:
     int reset();
 
 Q_SIGNALS:
+    void yubiKeySerialChanged();
     void yubiKeyVersionChanged();
     void otpListFetchedChanged();
     void otpListChanged();

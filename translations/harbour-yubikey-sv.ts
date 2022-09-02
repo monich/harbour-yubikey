@@ -113,6 +113,11 @@
         <extracomment>Card info label</extracomment>
         <translation>Version: %1</translation>
     </message>
+    <message id="yubikey-info-serial">
+        <source>Serial: %1</source>
+        <extracomment>Card info label</extracomment>
+        <translation type="unfinished">Serienummer: %1</translation>
+    </message>
     <message id="yubikey-info-no_creds">
         <source>No credentials are stored on this YubiKey</source>
         <extracomment>Card info label</extracomment>

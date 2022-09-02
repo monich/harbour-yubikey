@@ -85,6 +85,7 @@ operator<<(
 // s(SignalName,signalName)
 #define PARENT_SIGNALS(s) \
     s(YubiKeyId,yubiKeyId) \
+    s(YubiKeySerial,yubiKeySerial) \
     s(YubiKeyVersion,yubiKeyVersion) \
     s(YubiKeyOtpList,yubiKeyOtpList) \
     s(YubiKeyOtpData,yubiKeyOtpData) \
@@ -289,6 +290,9 @@ YubiKeyCard::Private::setYubiKeyId(
             if (iYubiKey->otpListFetched()) {
                 queueSignal(SignalOtpListFetchedChanged);
             }
+            if (!iYubiKey->yubiKeySerial()) {
+                queueSignal(SignalYubiKeySerialChanged);
+            }
             if (!iYubiKey->yubiKeyVersionString().isEmpty()) {
                 queueSignal(SignalYubiKeyVersionChanged);
             }
@@ -315,6 +319,7 @@ YubiKeyCard::Private::setYubiKeyId(
         const bool totpWasValid = totpValid();
         const int prevTotpTimeLeft = totpTimeLeft();
         const int otpListWasFetched = otpListFetched();
+        const uint prevSerial(iYubiKey ? iYubiKey->yubiKeySerial() : 0);
         const QByteArray prevVersion(iYubiKey ? iYubiKey->yubiKeyVersion() : QByteArray());
         const QByteArray prevOtpList(iYubiKey ? iYubiKey->otpList() : QByteArray());
         const QByteArray prevOtpData(iYubiKey ? iYubiKey->otpData() : QByteArray());
@@ -332,6 +337,9 @@ YubiKeyCard::Private::setYubiKeyId(
         HVERIFY(card->connect(iYubiKey,
             SIGNAL(yubiKeyReset()),
             SIGNAL(yubiKeyReset())));
+        HVERIFY(card->connect(iYubiKey,
+            SIGNAL(yubiKeySerialChanged()),
+            SIGNAL(yubiKeySerialChanged())));
         HVERIFY(card->connect(iYubiKey,
             SIGNAL(yubiKeyVersionChanged()),
             SIGNAL(yubiKeyVersionChanged())));
@@ -395,6 +403,9 @@ YubiKeyCard::Private::setYubiKeyId(
         }
         if (iYubiKey->otpListFetched() != otpListWasFetched) {
             queueSignal(SignalOtpListFetchedChanged);
+        }
+        if (iYubiKey->yubiKeySerial() != prevSerial) {
+            queueSignal(SignalYubiKeySerialChanged);
         }
         if (iYubiKey->yubiKeyVersion() != prevVersion) {
             queueSignal(SignalYubiKeyVersionChanged);
@@ -524,6 +535,12 @@ YubiKeyCard::YubiKeyState
 YubiKeyCard::yubiKeyState() const
 {
     return iPrivate->iYubiKeyState;
+}
+
+uint
+YubiKeyCard::yubiKeySerial() const
+{
+    return iPrivate->iYubiKey ? iPrivate->iYubiKey->yubiKeySerial() : 0;
 }
 
 QString

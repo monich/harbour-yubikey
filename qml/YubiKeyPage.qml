@@ -367,7 +367,7 @@ Page {
                     width: parent.width
                     height: Math.max(contentHeight, contentFlickable.height -
                         authDataColumn.y - (headerItem.visible ?  headerItem.height : 0) -
-                        versionLabel.height - cardIdLabel.height - 2 * Theme.paddingLarge)
+                        cardInfoColumn.height - 2 * Theme.paddingLarge)
 
                     header: Component {
                         ListSeparator {
@@ -526,29 +526,41 @@ Page {
 
                 VerticalPadding{ }
 
-                Label {
-                    id: versionLabel
+                Column {
+                    id: cardInfoColumn
 
                     x: Theme.horizontalPageMargin
                     width: parent.width - 2 * x
-                    horizontalAlignment: Text.AlignHCenter
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.secondaryHighlightColor
-                    visible: yubiKey.yubiKeyVersion !== ""
-                    //: Card info label
-                    //% "Version: %1"
-                    text: qsTrId("yubikey-info-version").arg(yubiKey.yubiKeyVersion)
-                }
 
-                Label {
-                    id: cardIdLabel
+                    Label {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                        visible: yubiKey.yubiKeySerial !== 0
+                        //: Card info label
+                        //% "Serial: %1"
+                        text: qsTrId("yubikey-info-serial").arg(yubiKey.yubiKeySerial)
+                    }
 
-                    x: Theme.horizontalPageMargin
-                    width: parent.width - 2 * x
-                    horizontalAlignment: Text.AlignHCenter
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.secondaryHighlightColor
-                    text: yubiKeyId
+                    Label {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                        visible: yubiKey.yubiKeyVersion !== ""
+                        //: Card info label
+                        //% "Version: %1"
+                        text: qsTrId("yubikey-info-version").arg(yubiKey.yubiKeyVersion)
+                    }
+
+                    Label {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                        text: yubiKeyId
+                    }
                 }
             }
 

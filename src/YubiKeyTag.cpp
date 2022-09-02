@@ -94,6 +94,7 @@ operator<<(
 #define YUBIKEY_TAG_SIGNALS(s) \
     s(TagState,tagState) \
     s(OperationIds,operationIds) \
+    s(YubiKeySerial,yubiKeySerial) \
     s(YubiKeyVersion,yubiKeyVersion) \
     s(YubiKeyAuthChallenge,yubiKeyAuthChallenge) \
     s(YubiKeyAuthAlgorithm,yubiKeyAuthAlgorithm) \
@@ -353,6 +354,7 @@ public:
     void updateYubiKeyVersion(const QByteArray);
     void updateYubiKeyAuthChallenge(const QByteArray);
     void updateYubiKeyAuthAlgorithm(YubiKeyAlgorithm);
+    void updateYubiKeySerial();
 
     void ref();
     void unref();
@@ -375,6 +377,7 @@ public:
     YubiKeyAlgorithm iYubiKeyAuthAlgorithm;
     QString iYubiKeyIdString;
     QString iYubiKeyVersionString;
+    uint iSerial;
     NfcTagClient* iTag;
     NfcIsoDepClient* iIsoDep;
     GCancellable* iCancel;
@@ -398,6 +401,7 @@ YubiKeyTag::Private::Private(
     iQueuedSignals(0),
     iFirstQueuedSignal(SignalCount),
     iYubiKeyAuthAlgorithm(YubiKeyAlgorithm_Unknown),
+    iSerial(0),
     iIsoDep(Q_NULLPTR),
     iCancel(Q_NULLPTR),
     iIsoDepEventId(0),
@@ -583,6 +587,7 @@ YubiKeyTag::Private::updateYubiKeyId(
         iYubiKeyIdString = YubiKeyUtil::toHex(aId);
         HDEBUG(qPrintable(iYubiKeyIdString));
         queueSignal(SignalYubiKeyIdChanged);
+        updateYubiKeySerial();
     }
 }
 
@@ -621,6 +626,46 @@ YubiKeyTag::Private::updateYubiKeyAuthAlgorithm(
 }
 
 void
+YubiKeyTag::Private::updateYubiKeySerial()
+{
+    uint serial = 0;
+
+    if (iTag->valid && iTag->present && !iYubiKeyId.isEmpty()) {
+        const GUtilData* nfcid1 =  nfc_tag_client_poll_param(iTag,
+            NFC_TAG_POLL_PARAM_NFCID1);
+
+        if (nfcid1) {
+            // https://docs.yubico.com/hardware/yubikey/yk-5/tech-manual/yk5-nfc-id-tech-desc.html
+            // serial_0 is the most significant byte
+            if (nfcid1->size == 7 && nfcid1->bytes[0] == 0x27) {
+                if (nfcid1->bytes[1] == 0 && nfcid1->bytes[2] == 0) {
+                    // YubiKey 5.2.x and lower versions
+                    // 0x27 0 0 serial_3 serial_2 serial_1 serial_0
+                    serial = (uint)nfcid1->bytes[3] +
+                        (((uint)nfcid1->bytes[4]) << 8) +
+                        (((uint)nfcid1->bytes[5]) << 16) +
+                        (((uint)nfcid1->bytes[6]) << 24);
+                } else if (nfcid1->bytes[1] == nfcid1->bytes[6] &&
+                    nfcid1->bytes[2] == nfcid1->bytes[5]) {
+                    // YubiKey v5.3.0 and Above
+                    // 0x27 serial_3 serial_2 serial_1 serial_0 serial_2 serial_3
+                    serial = (uint)nfcid1->bytes[1] +
+                        (((uint)nfcid1->bytes[2]) << 8) +
+                        (((uint)nfcid1->bytes[3]) << 16) +
+                        (((uint)nfcid1->bytes[4]) << 24);
+                }
+            }
+        }
+    }
+
+    if (iSerial != serial) {
+        HDEBUG(serial);
+        iSerial = serial;
+        queueSignal(SignalYubiKeySerialChanged);
+    }
+}
+
+void
 YubiKeyTag::Private::tagEvent(
     NfcTagClient*,
     NFC_TAG_PROPERTY,
@@ -649,6 +694,7 @@ YubiKeyTag::Private::isoDepEvent(
 void
 YubiKeyTag::Private::updateTagState()
 {
+    updateYubiKeySerial();
     if (iTag->valid) {
         if (iTag->present) {
             if (gutil_strv_contains(iTag->interfaces, NFC_TAG_INTERFACE_ISODEP)) {
@@ -1539,6 +1585,12 @@ YubiKeyAlgorithm
 YubiKeyTag::yubiKeyAuthAlgorithm() const
 {
     return iPrivate->iYubiKeyAuthAlgorithm;
+}
+
+uint
+YubiKeyTag::yubiKeySerial() const
+{
+    return iPrivate->iSerial;
 }
 
 bool

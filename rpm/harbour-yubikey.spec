@@ -61,16 +61,8 @@ Url:
 %qtc_make %{?_smp_mflags}
 
 %install
-%define dbus_config_dir %{_sysconfdir}/dbus-1/system.d
-%define dbus_config_file harbour.yubikey.conf
-%define nfcd_config_dir %{_sysconfdir}/nfcd/ndef-handlers
-%define nfcd_config_file _harbour-yubikey.conf
 rm -rf %{buildroot}
 %qmake5_install
-install -d -m 755 %{buildroot}%{dbus_config_dir}
-install -d -m 755 %{buildroot}%{nfcd_config_dir}
-install -m 644 %{dbus_config_file} %{buildroot}%{dbus_config_dir}
-install -m 644 %{nfcd_config_file} %{buildroot}%{nfcd_config_dir}
 
 desktop-file-install --delete-original \
   --dir %{buildroot}%{_datadir}/applications \
@@ -91,5 +83,5 @@ fi
 %{_datadir}/%{name}
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
-%{dbus_config_dir}/%{dbus_config_file}
-%{nfcd_config_dir}/%{nfcd_config_file}
+%{_sysconfdir}/dbus-1/system.d/harbour.yubikey.conf
+%{_sysconfdir}/nfcd/ndef-handlers/_harbour-yubikey.conf

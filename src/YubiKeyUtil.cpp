@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -62,6 +62,19 @@ YubiKeyUtil::configDir(
     const QByteArray aYubiKeyId)
 {
     return QDir(configDir().absoluteFilePath(YubiKeyUtil::toHex(aYubiKeyId)));
+}
+
+uint
+YubiKeyUtil::versionToNumber(
+    const uchar* aData,
+    gsize aSize)
+{
+    // The version is typically 3 bytes long
+    uint v = 0;
+    for (gsize i = 0; i < aSize; i++) {
+        v = (v << 8) | aData[i];
+    }
+    return v;
 }
 
 QString

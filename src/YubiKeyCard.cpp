@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -98,7 +98,8 @@ operator<<(
     s(TotpTimeLeft,totpTimeLeft) \
     s(TotpValid,totpValid)
 
-class YubiKeyCard::Private : public QObject
+class YubiKeyCard::Private :
+    public QObject
 {
     Q_OBJECT
 
@@ -319,8 +320,8 @@ YubiKeyCard::Private::setYubiKeyId(
         const bool totpWasValid = totpValid();
         const int prevTotpTimeLeft = totpTimeLeft();
         const int otpListWasFetched = otpListFetched();
-        const uint prevSerial(iYubiKey ? iYubiKey->yubiKeySerial() : 0);
-        const QByteArray prevVersion(iYubiKey ? iYubiKey->yubiKeyVersion() : QByteArray());
+        const uint prevSerial = iYubiKey ? iYubiKey->yubiKeySerial() : 0;
+        const uint prevVersion = iYubiKey ? iYubiKey->yubiKeyVersion() : 0;
         const QByteArray prevOtpList(iYubiKey ? iYubiKey->otpList() : QByteArray());
         const QByteArray prevOtpData(iYubiKey ? iYubiKey->otpData() : QByteArray());
         const QList<int> prevOperationIds(iYubiKey ? iYubiKey->operationIds() : QList<int>());
@@ -543,8 +544,14 @@ YubiKeyCard::yubiKeySerial() const
     return iPrivate->iYubiKey ? iPrivate->iYubiKey->yubiKeySerial() : 0;
 }
 
-QString
+uint
 YubiKeyCard::yubiKeyVersion() const
+{
+    return iPrivate->iYubiKey ? iPrivate->iYubiKey->yubiKeyVersion() : 0;
+}
+
+QString
+YubiKeyCard::yubiKeyVersionString() const
 {
     return iPrivate->iYubiKey ?
         iPrivate->iYubiKey->yubiKeyVersionString() :

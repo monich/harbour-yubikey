@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -52,7 +52,8 @@ class YubiKeyCard :
     Q_DISABLE_COPY(YubiKeyCard)
     Q_PROPERTY(QString yubiKeyId READ yubiKeyId WRITE setYubiKeyId NOTIFY yubiKeyIdChanged)
     Q_PROPERTY(uint yubiKeySerial READ yubiKeySerial NOTIFY yubiKeySerialChanged)
-    Q_PROPERTY(QString yubiKeyVersion READ yubiKeyVersion NOTIFY yubiKeyVersionChanged)
+    Q_PROPERTY(uint yubiKeyVersion READ yubiKeyVersion NOTIFY yubiKeyVersionChanged)
+    Q_PROPERTY(QString yubiKeyVersionString READ yubiKeyVersionString NOTIFY yubiKeyVersionChanged)
     Q_PROPERTY(QString yubiKeyOtpList READ yubiKeyOtpList NOTIFY yubiKeyOtpListChanged)
     Q_PROPERTY(QString yubiKeyOtpData READ yubiKeyOtpData NOTIFY yubiKeyOtpDataChanged)
     Q_PROPERTY(YubiKeyState yubiKeyState READ yubiKeyState NOTIFY yubiKeyStateChanged)
@@ -77,7 +78,9 @@ public:
 
         TypeUnknown = YubiKeyTokenType_Unknown,
         TypeHOTP = YubiKeyTokenType_HOTP,
-        TypeTOTP = YubiKeyTokenType_TOTP
+        TypeTOTP = YubiKeyTokenType_TOTP,
+
+        Version_5_3_0 = 0x050300
     };
 
     enum YubiKeyState {
@@ -99,7 +102,8 @@ public:
     void setYubiKeyId(const QString);
     QString yubiKeyId() const;
     uint yubiKeySerial() const;
-    QString yubiKeyVersion() const;
+    uint yubiKeyVersion() const;
+    QString yubiKeyVersionString() const;
     QString yubiKeyOtpList() const;
     QString yubiKeyOtpData() const;
     YubiKeyState yubiKeyState() const;

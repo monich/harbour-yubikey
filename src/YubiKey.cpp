@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -299,6 +299,7 @@ public:
     const QByteArray iYubiKeyId;
     const QString iYubiKeyIdString;
     QByteArray iYubiKeyVersion;
+    uint iYubiKeyVersionNumber;
     QString iYubiKeyVersionString;
     uint iYubiKeySerial;
     QByteArray iOtpList;
@@ -364,6 +365,7 @@ YubiKey::Private::Private(
     iAuthAccess(YubiKeyAuthAccessUnknown),
     iYubiKeyId(aYubiKeyId),
     iYubiKeyIdString(YubiKeyUtil::toHex(aYubiKeyId)),
+    iYubiKeyVersionNumber(0),
     iYubiKeySerial(0),
     iOtpListFetched(false),
     iTotpTimer(new QTimer(this)),
@@ -692,6 +694,7 @@ YubiKey::Private::updateYubiKeyVersion()
         if (iYubiKeyVersion != version) {
             iYubiKeyVersion = version;
             iYubiKeyVersionString = YubiKeyUtil::versionToString(version);
+            iYubiKeyVersionNumber = YubiKeyUtil::versionToNumber(version);
             HDEBUG(qPrintable(iYubiKeyVersionString));
             queueSignal(SignalYubiKeyVersionChanged);
         }
@@ -1840,16 +1843,16 @@ YubiKey::yubiKeyId() const
     return iPrivate->iYubiKeyId;
 }
 
-const QByteArray
-YubiKey::yubiKeyVersion() const
-{
-    return iPrivate->iYubiKeyVersion;
-}
-
 const QString
 YubiKey::yubiKeyIdString() const
 {
     return iPrivate->iYubiKeyIdString;
+}
+
+uint
+YubiKey::yubiKeyVersion() const
+{
+    return iPrivate->iYubiKeyVersionNumber;
 }
 
 const QString

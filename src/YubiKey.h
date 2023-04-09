@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -65,13 +65,13 @@ public:
     void unref();
 
     const QByteArray yubiKeyId() const;
-    const QByteArray yubiKeyVersion() const;
     const QByteArray otpList() const;
     const QByteArray otpData() const;
     bool otpListFetched() const;
     bool present() const;
     YubiKeyAuthAccess authAccess() const;
     uint yubiKeySerial() const;
+    uint yubiKeyVersion() const;
 
     const QString yubiKeyIdString() const;
     const QString yubiKeyVersionString() const;

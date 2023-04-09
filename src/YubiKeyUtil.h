@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -71,6 +71,10 @@ public:
 
     static QDir configDir();
     static QDir configDir(const QByteArray);
+
+    static uint versionToNumber(const uchar*, gsize);
+    static inline uint versionToNumber(const QByteArray& aData)
+        { return versionToNumber((uchar*)aData.constData(), aData.size()); }
 
     static QString versionToString(const uchar*, gsize);
     static inline QString versionToString(const QByteArray& aData)

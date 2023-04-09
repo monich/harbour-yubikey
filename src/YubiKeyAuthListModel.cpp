@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -43,6 +43,9 @@
 
 #include <QDir>
 #include <QSettings>
+#include <QCryptographicHash>
+
+#include <ctype.h>
 
 // Model roles
 #define MODEL_ROLES_(first,role,last) \
@@ -104,12 +107,15 @@ public:
 
     QVariant get(Role) const;
 
+    static QString nameHashUtf8(const QByteArray&);
+    static QString nameHash(const QString&);
     static YubiKeyTokenType toAuthType(uchar);
     static YubiKeyAlgorithm toAuthAlgorithm(uchar);
 
 public:
     const QByteArray iUtf8Name;
     const QString iName;
+    const QString iNameHash;
     const YubiKeyTokenType iType;
     const YubiKeyAlgorithm iAlgorithm;
     QString iPassword;
@@ -125,6 +131,7 @@ YubiKeyAuthListModel::ModelData::ModelData(
     YubiKeyAlgorithm aAlgorithm) :
     iUtf8Name(aUtf8Name),
     iName(QString::fromUtf8(aUtf8Name)),
+    iNameHash(nameHashUtf8(aUtf8Name)),
     iType(aType),
     iAlgorithm(aAlgorithm),
     iFavorite(false),
@@ -150,6 +157,19 @@ YubiKeyAuthListModel::ModelData::get(
     case MarkedForDeletionRole: return iMark == MarkForDeletion;
     }
     return QVariant();
+}
+
+QString
+YubiKeyAuthListModel::ModelData::nameHashUtf8(
+    const QByteArray& aUtf8)
+{
+    return QCryptographicHash::hash(aUtf8, QCryptographicHash::Sha1).toHex();
+}
+
+QString
+YubiKeyAuthListModel::ModelData::nameHash(const QString& aName)
+{
+    return nameHashUtf8(aName.toUtf8());
 }
 
 YubiKeyTokenType
@@ -301,6 +321,7 @@ public:
     void updateMarkedForRefresh();
     void updateMarkedForDeletion();
     void markChanged(ModelData::Mark, QVector<int>*);
+    QString getFavoriteName();
     QVector<int> toggleMark(ModelData*, ModelData::Mark, bool);
     QStringList marked(ModelData::Mark aMark);
 
@@ -392,6 +413,35 @@ YubiKeyAuthListModel::Private::emitQueuedSignals()
     }
 }
 
+QString
+YubiKeyAuthListModel::Private::getFavoriteName()
+{
+    if (iSettings) {
+        // Favorite name was originall stored in plain text
+        static const int Sha1Len = 20 * 2; // 2 hex digits per byte
+        bool isSha1 = false;
+        QString favorite(iSettings->value(FAVORITE_ENTRY).toString());
+        const int len = favorite.length();
+        if (len == Sha1Len) {
+            isSha1 = true;
+            const QChar* chars = favorite.constData();
+            for (int i = 0; i < len && isSha1; i++) {
+                isSha1 = isxdigit(chars[i].unicode());
+            }
+        }
+        if (isSha1) {
+            return favorite;
+        } else {
+            QString hash(ModelData::nameHash(favorite));
+
+            HDEBUG("Replacing favorite name" << favorite << "with" << hash);
+            iSettings->setValue(FAVORITE_ENTRY, hash);
+            return hash;
+        }
+    }
+    return QString();
+}
+
 void
 YubiKeyAuthListModel::Private::setYubiKeyId(
     const QString aYubiKeyId)
@@ -410,7 +460,7 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
             iConfigDir.mkpath(".");
             iSettings = new QSettings(settingsFile, QSettings::IniFormat);
 
-            const QString favoriteName(iSettings->value(FAVORITE_ENTRY).toString());
+            const QString favoriteName(getFavoriteName());
             const QVector<int> roles(1, ModelData::FavoriteRole);
             QString realFavoriteName, favoritePassword;
             YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
@@ -420,7 +470,7 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
             for (int i = 0; i < iList.count(); i++) {
                 ModelData* entry = iList.at(i);
 
-                if (entry->iName == favoriteName) {
+                if (entry->iNameHash == favoriteName) {
                     realFavoriteName = favoriteName;
                     favoritePassword = entry->iPassword;
                     favoriteTokenType = entry->iType;
@@ -468,16 +518,14 @@ YubiKeyAuthListModel::Private::setItems(
     bool favoriteExpired = false, favoriteMfR = false;
     YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
     QString realFavoriteName, favoritePassword;
-    const QString favoriteName(iSettings ?
-        iSettings->value(FAVORITE_ENTRY).toString() :
-        QString());
+    const QString favoriteName(getFavoriteName());
 
     for (int i = 0; i < n; i++) {
         ModelData* entry = iList.at(i);
 
-        entry->iFavorite = (entry->iName == favoriteName);
+        entry->iFavorite = (entry->iNameHash == favoriteName);
         if (entry->iFavorite) {
-            realFavoriteName = favoriteName;
+            realFavoriteName = entry->iName;
             favoritePassword = entry->iPassword;
             favoriteTokenType = entry->iType;
             favoriteExpired = entry->iExpired;
@@ -1005,7 +1053,7 @@ YubiKeyAuthListModel::setData(
 
                 if (settings) {
                     if (b) {
-                        settings->setValue(Private::FAVORITE_ENTRY, data->iName);
+                        settings->setValue(Private::FAVORITE_ENTRY, data->iNameHash);
                     } else {
                         settings->remove(Private::FAVORITE_ENTRY);
                     }

@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -276,8 +276,7 @@ YubiKeyRecognizer::Handler::handleTagStateChange(
 
 // s(SignalName,signalName)
 #define YUBIKEY_RECOGNIZER_SIGNALS(s) \
-    s(YubiKeyVersion,yubiKeyVersion) \
-    s(YubiKeyId,yubiKeyId) // Must be signalled after YubiKeyVersion
+    s(YubiKeyId,yubiKeyId)
 
 class YubiKeyRecognizer::Private:
     public QObject
@@ -316,7 +315,6 @@ public:
 public Q_SLOTS:
     void onTagStateChanged();
     void onTagYubiKeyIdChanged();
-    void onTagYubiKeyVersionChanged();
 
 public:
     SignalMask iQueuedSignals;
@@ -324,9 +322,7 @@ public:
     NfcDefaultAdapter* iAdapter;
     gulong iAdapterEventId;
     QByteArray iLastId;
-    QByteArray iLastVersion;
     QString iLastIdString;
-    QString iLastVersionString;
     Handler* iHandler;
     YubiKeyTag* iTag;
 };
@@ -438,11 +434,6 @@ YubiKeyRecognizer::Private::clearState()
         iLastIdString.clear();
         queueSignal(SignalYubiKeyIdChanged);
     }
-    if (!iLastVersion.isEmpty()) {
-        iLastVersion.clear();
-        iLastVersionString.clear();
-        queueSignal(SignalYubiKeyVersionChanged);
-    }
     emitQueuedSignals(emitSignal);
 }
 
@@ -472,11 +463,7 @@ YubiKeyRecognizer::Private::updatePath(
             connect(iTag,
                 SIGNAL(yubiKeyIdChanged()),
                 SLOT(onTagYubiKeyIdChanged()));
-            connect(iTag,
-                SIGNAL(yubiKeyVersionChanged()),
-                SLOT(onTagYubiKeyVersionChanged()));
             updateYubiKeyId();
-            updateYubiKeyVersion();
         }
     } else {
         dropTag();
@@ -497,19 +484,6 @@ YubiKeyRecognizer::Private::updateYubiKeyId()
 }
 
 void
-YubiKeyRecognizer::Private::updateYubiKeyVersion()
-{
-    const QByteArray version(iTag->yubiKeyVersion());
-
-    if (!version.isEmpty() && version != iLastVersion) {
-        iLastVersion = version;
-        iLastVersionString = iTag->yubiKeyVersionString();
-        HDEBUG(qPrintable(iLastVersionString));
-        queueSignal(SignalYubiKeyVersionChanged);
-    }
-}
-
-void
 YubiKeyRecognizer::Private::onTagStateChanged()
 {
     iHandler->handleTagStateChange(iTag);
@@ -519,13 +493,6 @@ void
 YubiKeyRecognizer::Private::onTagYubiKeyIdChanged()
 {
     updateYubiKeyId();
-    emitQueuedSignals(emitSignal);
-}
-
-void
-YubiKeyRecognizer::Private::onTagYubiKeyVersionChanged()
-{
-    updateYubiKeyVersion();
     emitQueuedSignals(emitSignal);
 }
 
@@ -564,12 +531,6 @@ QString
 YubiKeyRecognizer::yubiKeyId() const
 {
     return iPrivate->iLastIdString;
-}
-
-QString
-YubiKeyRecognizer::yubiKeyVersion() const
-{
-    return iPrivate->iLastVersionString;
 }
 
 void

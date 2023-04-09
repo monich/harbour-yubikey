@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -50,7 +50,6 @@ class YubiKeyRecognizer :
     Q_OBJECT
     Q_DISABLE_COPY(YubiKeyRecognizer)
     Q_PROPERTY(QString yubiKeyId READ yubiKeyId NOTIFY yubiKeyIdChanged)
-    Q_PROPERTY(QString yubiKeyVersion READ yubiKeyVersion NOTIFY yubiKeyVersionChanged)
 
 public:
     explicit YubiKeyRecognizer(QObject* aParent = Q_NULLPTR);
@@ -59,13 +58,11 @@ public:
     static QObject* createSingleton(QQmlEngine*, QJSEngine*);
 
     QString yubiKeyId() const;
-    QString yubiKeyVersion() const;
 
     Q_INVOKABLE void clearState();
 
 Q_SIGNALS:
     void yubiKeyIdChanged();
-    void yubiKeyVersionChanged();
 
 private:
     class Adaptor;

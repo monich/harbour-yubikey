@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -43,6 +43,7 @@
 #include <QByteArray>
 #include <QDebug>
 #include <QMetaType>
+#include <QVariantMap>
 #include <QString>
 
 class YubiKeyToken
@@ -85,6 +86,7 @@ public:
     int digits() const;
     int counter() const;
 
+    Q_REQUIRED_RESULT QVariantMap toVariantMap() const;
     Q_REQUIRED_RESULT YubiKeyToken withType(YubiKeyTokenType) const;
     Q_REQUIRED_RESULT YubiKeyToken withAlgorithm(YubiKeyAlgorithm) const;
     Q_REQUIRED_RESULT YubiKeyToken withLabel(const QString) const;

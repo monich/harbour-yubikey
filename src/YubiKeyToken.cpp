@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -237,6 +237,24 @@ YubiKeyToken::operator!=(
     const YubiKeyToken& aToken) const
 {
     return !equals(aToken);
+}
+
+QVariantMap
+YubiKeyToken::toVariantMap() const
+{
+    QVariantMap out;
+
+    out.insert(QStringLiteral("valid"), valid());
+    if (valid()) {
+        out.insert(QStringLiteral("type"), (int) iPrivate->iType);
+        out.insert(QStringLiteral("algorithm"), (int) iPrivate->iAlgorithm);
+        out.insert(QStringLiteral("label"), iPrivate->iLabel);
+        out.insert(QStringLiteral("issuer"), iPrivate->iIssuer);
+        out.insert(QStringLiteral("secret"), iPrivate->iSecretBase32);
+        out.insert(QStringLiteral("digits"), iPrivate->iDigits);
+        out.insert(QStringLiteral("counter"), iPrivate->iCounter);
+    }
+    return out;
 }
 
 YubiKeyToken

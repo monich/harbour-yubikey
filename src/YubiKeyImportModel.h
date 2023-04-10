@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -62,7 +62,7 @@ public:
     QList<YubiKeyToken> selectedTokens() const;
     bool haveSelectedTokens() const;
 
-    Q_INVOKABLE YubiKeyToken getToken(int) const;
+    Q_INVOKABLE QVariantMap getToken(int) const;
     Q_INVOKABLE void setToken(int, int, int, const QString, const QString, const QString, int, int);
 
     // QAbstractItemModel

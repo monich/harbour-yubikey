@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -72,7 +72,6 @@
 #define TOKEN_ALGORITHM_SHA512 "SHA512"
 
 #define TOKEN_KEY_TYPE "type"
-#define TOKEN_KEY_LABEL "label"
 #define TOKEN_KEY_SECRET "secret"
 #define TOKEN_KEY_ISSUER "issuer"
 #define TOKEN_KEY_DIGITS "digits"
@@ -742,13 +741,13 @@ YubiKeyImportModel::setOtpUri(
     iPrivate->setOtpUri(aOtpUri);
 }
 
-YubiKeyToken
+QVariantMap
 YubiKeyImportModel::getToken(
     int aIndex) const
 {
     const ModelData* entry = iPrivate->dataAt(aIndex);
 
-    return entry ? entry->iToken : YubiKeyToken();
+    return entry ? entry->iToken.toVariantMap() : QVariantMap();
 }
 
 QList<YubiKeyToken>

@@ -84,6 +84,7 @@ public:
 
     int putTokens(const QList<YubiKeyToken>);
     bool submitPassword(const QString, bool);
+    bool renameToken(const QString, const QString);
     void refreshTokens(const QStringList);
     void deleteTokens(const QStringList);
     int setPassword(const QString);

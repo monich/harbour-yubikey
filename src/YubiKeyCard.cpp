@@ -664,6 +664,15 @@ YubiKeyCard::deleteTokens(
 }
 
 bool
+YubiKeyCard::renameToken(
+    const QString aFrom,
+    const QString aTo)
+{
+    return iPrivate->iYubiKey &&
+        iPrivate->iYubiKey->renameToken(aFrom, aTo);
+}
+
+bool
 YubiKeyCard::submitPassword(
     const QString aPassword,
     bool aSave)

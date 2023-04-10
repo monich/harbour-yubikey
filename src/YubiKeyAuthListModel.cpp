@@ -195,7 +195,8 @@ YubiKeyAuthListModel::ModelData::toAuthAlgorithm(
 // YubiKeyAuthListModel::ModelData::List
 // ==========================================================================
 
-class YubiKeyAuthListModel::ModelData::List : public QList<ModelData*>
+class YubiKeyAuthListModel::ModelData::List :
+    public QList<ModelData*>
 {
 public:
     List() {}
@@ -203,6 +204,7 @@ public:
 
     ModelData* dataAt(int) const;
     int findUtf8(const QByteArray, int) const;
+    int findName(const QString) const;
 };
 
 YubiKeyAuthListModel::ModelData::List::List(
@@ -284,6 +286,19 @@ YubiKeyAuthListModel::ModelData::List::findUtf8(
         }
         return -1;
     }
+}
+
+int
+YubiKeyAuthListModel::ModelData::List::findName(
+    const QString aName) const
+{
+    const int n = count();
+    for (int i = 0; i < n; i++) {
+        if (at(i)->iName == aName) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 // ==========================================================================
@@ -993,6 +1008,13 @@ YubiKeyAuthListModel::totpCodesExpired()
         }
         iPrivate->emitQueuedSignals();
     }
+}
+
+bool
+YubiKeyAuthListModel::containsName(
+    const QString aName) const
+{
+    return iPrivate->iList.findName(aName) >= 0;
 }
 
 Qt::ItemFlags

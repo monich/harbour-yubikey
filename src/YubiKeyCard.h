@@ -120,6 +120,7 @@ public:
     Q_INVOKABLE int putTokens(const QList<YubiKeyToken>);
     Q_INVOKABLE void refreshTokens(const QStringList);
     Q_INVOKABLE void deleteTokens(const QStringList);
+    Q_INVOKABLE bool renameToken(const QString, const QString);
     Q_INVOKABLE bool submitPassword(const QString, bool);
     Q_INVOKABLE int setPassword(const QString);
     Q_INVOKABLE int reset();

@@ -197,7 +197,7 @@ public:
         int iNextName;
     };
 
-    // Delete
+    // Put
     class PutOperation : public KeyOperation {
     public:
         PutOperation(YubiKey*, const QList<YubiKeyToken>);
@@ -214,6 +214,22 @@ public:
         int iNextToken;
     };
 
+    // Rename
+    class RenameOperation : public KeyOperation {
+    public:
+        RenameOperation(YubiKey*, const QString, const QString);
+
+    protected:
+        bool startOperation() Q_DECL_OVERRIDE;
+
+    private:
+        static void renameResp(Operation*, const GUtilData*, guint, const GError*);
+
+    private:
+        const QString iFrom;
+        const QString iTo;
+    };
+
 public:
     static QMap<QByteArray,YubiKey*> gMap;
 
@@ -225,6 +241,7 @@ public:
     static const NfcIsoDepApdu CMD_SET_CODE;
     static const NfcIsoDepApdu CMD_PUT_TEMPLATE;
     static const NfcIsoDepApdu CMD_DELETE_TEMPLATE;
+    static const NfcIsoDepApdu CMD_RENAME_TEMPLATE;
     static const NfcIsoDepApdu CMD_SEND_REMAINING;
 
     static const uchar CMD_SET_CODE_DATA[];
@@ -344,6 +361,9 @@ const NfcIsoDepApdu YubiKey::Private::CMD_PUT_TEMPLATE = {
 };
 const NfcIsoDepApdu YubiKey::Private::CMD_DELETE_TEMPLATE = {
     0x00, 0x02, 0x00, 0x00, { NULL, 0 }, 0
+};
+const NfcIsoDepApdu YubiKey::Private::CMD_RENAME_TEMPLATE = {
+    0x00, 0x05, 0x00, 0x00, { NULL, 0 }, 0
 };
 const NfcIsoDepApdu YubiKey::Private::CMD_SEND_REMAINING = {
     0x00, 0xa5, 0x00, 0x00, { NULL, 0 }, 0
@@ -1769,6 +1789,74 @@ YubiKey::Private::PutOperation::putResp(
 }
 
 // ==========================================================================
+// YubiKey::Private::RenameOperation
+// ==========================================================================
+
+YubiKey::Private::RenameOperation::RenameOperation(
+    YubiKey* aKey,
+    const QString aFrom,
+    const QString aTo) :
+    KeyOperation("Rename", aKey),
+    iFrom(aFrom),
+    iTo(aTo)
+{
+}
+
+bool
+YubiKey::Private::RenameOperation::startOperation()
+{
+    // Rename credential
+    //
+    // +-----------------+----------------------------------------------+
+    // | Name tag        | 0x71                                         |
+    // | Name length     | Length of name data, max 64 bytes            |
+    // | Name data       | The current credential's name                |
+    // +-----------------+----------------------------------------------+
+    // | Name tag        | 0x71                                         |
+    // | Name length     | Length of name data, max 64 bytes            |
+    // | Name data       | The new credential's name                    |
+    // +-----------------+----------------------------------------------+
+
+    QByteArray data;
+
+    YubiKeyUtil::appendTLV(&data, TLV_TAG_NAME, nameToUtf8(iFrom));
+    YubiKeyUtil::appendTLV(&data, TLV_TAG_NAME, nameToUtf8(iTo));
+
+    NfcIsoDepApdu renameCmd = CMD_RENAME_TEMPLATE;
+
+    renameCmd.data.bytes = (const guint8*) data.constData();
+    renameCmd.data.size = data.size();
+    HDEBUG("RENAME" << iFrom << "=>" << iTo);
+    return transmit(&renameCmd, renameResp);
+}
+
+void
+YubiKey::Private::RenameOperation::renameResp(
+    Operation* aOperation,
+    const GUtilData*,
+    guint aSw,
+    const GError* aError)
+{
+    RenameOperation* self = (RenameOperation*)aOperation;
+    YubiKey* key = self->iYubiKey;
+    YubiKey::Private* priv = key->iPrivate;
+
+    if (!aError) {
+#if HARBOUR_DEBUG
+        if (aSw == RC_OK) {
+            HDEBUG("RENAME ok");
+        } else{
+            HDEBUG("RENAME error" << hex << aSw);
+        }
+#endif // HARBOUR_DEBUG
+        priv->requestList(true);
+    } else {
+        REPORT_ERROR("RENAME", aSw, aError);
+    }
+    self->finished(!aError);
+}
+
+// ==========================================================================
 // YubiKey
 // ==========================================================================
 
@@ -1956,6 +2044,14 @@ YubiKey::putTokens(
         return iPrivate->submit(new Private::PutOperation(this, aTokens));
     }
     return 0;
+}
+
+bool
+YubiKey::renameToken(
+    const QString aFrom,
+    const QString aTo)
+{
+    return iPrivate->submit(new Private::RenameOperation(this, aFrom, aTo));
 }
 
 bool

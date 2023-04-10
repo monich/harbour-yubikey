@@ -86,6 +86,8 @@ public:
     QStringList markedForDeletion() const;
     bool haveExpiringTotpCodes() const;
 
+    Q_INVOKABLE bool containsName(const QString) const;
+
     // QAbstractItemModel
     Qt::ItemFlags flags(const QModelIndex&) const Q_DECL_OVERRIDE;
     QHash<int,QByteArray> roleNames() const Q_DECL_OVERRIDE;

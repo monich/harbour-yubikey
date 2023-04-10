@@ -432,26 +432,30 @@ QString
 YubiKeyAuthListModel::Private::getFavoriteName()
 {
     if (iSettings) {
-        // Favorite name was originall stored in plain text
-        static const int Sha1Len = 20 * 2; // 2 hex digits per byte
-        bool isSha1 = false;
         QString favorite(iSettings->value(FAVORITE_ENTRY).toString());
         const int len = favorite.length();
-        if (len == Sha1Len) {
-            isSha1 = true;
-            const QChar* chars = favorite.constData();
-            for (int i = 0; i < len && isSha1; i++) {
-                isSha1 = isxdigit(chars[i].unicode());
-            }
-        }
-        if (isSha1) {
-            return favorite;
-        } else {
-            QString hash(ModelData::nameHash(favorite));
 
-            HDEBUG("Replacing favorite name" << favorite << "with" << hash);
-            iSettings->setValue(FAVORITE_ENTRY, hash);
-            return hash;
+        if (len > 0) {
+            // Favorite name was originally stored in plain text
+            static const int Sha1Len = 20 * 2; // 2 hex digits per byte
+            bool isSha1 = false;
+
+            if (len == Sha1Len) {
+                isSha1 = true;
+                const QChar* chars = favorite.constData();
+                for (int i = 0; i < len && isSha1; i++) {
+                    isSha1 = isxdigit(chars[i].unicode());
+                }
+            }
+            if (isSha1) {
+                return favorite;
+            } else {
+                QString hash(ModelData::nameHash(favorite));
+
+                HDEBUG("Replacing favorite name" << favorite << "with" << hash);
+                iSettings->setValue(FAVORITE_ENTRY, hash);
+                return hash;
+            }
         }
     }
     return QString();

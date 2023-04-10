@@ -663,13 +663,18 @@ YubiKeyCard::deleteTokens(
     }
 }
 
-bool
+int
 YubiKeyCard::renameToken(
     const QString aFrom,
     const QString aTo)
 {
-    return iPrivate->iYubiKey &&
-        iPrivate->iYubiKey->renameToken(aFrom, aTo);
+    if (iPrivate->present()) {
+        HDEBUG("Renaming" << aFrom << "=>" << aTo);
+        return iPrivate->iYubiKey->renameToken(aFrom, aTo);
+    } else {
+        HDEBUG("Can't rename token (YubiKey is not present)");
+        return 0;
+    }
 }
 
 bool

@@ -83,8 +83,8 @@ public:
     int totpTimeLeft() const; // seconds
 
     int putTokens(const QList<YubiKeyToken>);
+    int renameToken(const QString, const QString);
     bool submitPassword(const QString, bool);
-    bool renameToken(const QString, const QString);
     void refreshTokens(const QStringList);
     void deleteTokens(const QStringList);
     int setPassword(const QString);

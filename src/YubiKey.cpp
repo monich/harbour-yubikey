@@ -796,7 +796,7 @@ YubiKey::Private::updateOtpData(
         // +---------------+----------------------------------------------+
         while ((tag = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
             switch (tag) {
-            case YubiKeyConstants::TLV_TAG_NAME:
+            case TLV_TAG_NAME:
                 name = QString::fromUtf8((char*)data.bytes, (int)data.size);
                 break;
             case TLV_TAG_NO_RESPONSE:
@@ -2046,7 +2046,7 @@ YubiKey::putTokens(
     return 0;
 }
 
-bool
+int
 YubiKey::renameToken(
     const QString aFrom,
     const QString aTo)

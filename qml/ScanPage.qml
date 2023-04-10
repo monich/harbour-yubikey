@@ -1,7 +1,9 @@
 import QtQuick 2.0
 import QtMultimedia 5.4
 import Sailfish.Silica 1.0
+import Sailfish.Media 1.0
 import org.nemomobile.notifications 1.0
+import org.nemomobile.policy 1.0
 import harbour.yubikey 1.0
 
 import "harbour"
@@ -9,8 +11,10 @@ import "harbour"
 Page {
     id: thisPage
 
-    property Item viewFinder
-    readonly property bool canScan: viewFinder && viewFinder.source.cameraState === Camera.ActiveState
+    property Item _viewFinder
+    readonly property bool _canUseVolumeKeys: YubiKeySettings.volumeZoom && Qt.application.active &&
+        (status === PageStatus.Active)
+    readonly property bool canScan: _viewFinder && _viewFinder.source.cameraState === Camera.ActiveState
     readonly property bool canShowViewFinder: Qt.application.active &&
         (status === PageStatus.Active || status === PageStatus.Deactivating)
 
@@ -26,22 +30,22 @@ Page {
 
     onCanShowViewFinderChanged: {
         if (canShowViewFinder) {
-            viewFinder = viewFinderComponent.createObject(viewFinderContainer, {
+            _viewFinder = viewFinderComponent.createObject(viewFinderContainer, {
                 viewfinderResolution: viewFinderContainer.viewfinderResolution,
                 digitalZoom: YubiKeySettings.scanZoom,
                 orientation: orientationAngle()
             })
 
-            if (viewFinder.source.availability === Camera.Available) {
+            if (_viewFinder.source.availability === Camera.Available) {
                 console.log("created viewfinder")
-                viewFinder.source.start()
+                _viewFinder.source.start()
             } else {
                 console.log("oops, couldn't create viewfinder...")
             }
         } else {
-            viewFinder.source.stop()
-            viewFinder.destroy()
-            viewFinder = null
+            _viewFinder.source.stop()
+            _viewFinder.destroy()
+            _viewFinder = null
         }
     }
 
@@ -63,8 +67,8 @@ Page {
     }
 
     onOrientationChanged: {
-        if (viewFinder) {
-            viewFinder.orientation = orientationAngle()
+        if (_viewFinder) {
+            _viewFinder.orientation = orientationAngle()
         }
     }
 
@@ -186,9 +190,9 @@ Page {
             readonly property bool canSwitchResolutions: typeof ViewfinderResolution_4_3 !== "undefined" &&
                 typeof ViewfinderResolution_16_9 !== "undefined"
             readonly property size viewfinderResolution: canSwitchResolutions ?
-                (FoilAuthSettings.scanWideMode ? ViewfinderResolution_4_3 : ViewfinderResolution_16_9) :
+                (YubiKeySettings.scanWideMode ? ViewfinderResolution_4_3 : ViewfinderResolution_16_9) :
                 Qt.size(0,0)
-            readonly property real ratio: canSwitchResolutions ? (FoilAuthSettings.scanWideMode ? ratio_4_3 : ratio_16_9) :
+            readonly property real ratio: canSwitchResolutions ? (YubiKeySettings.scanWideMode ? ratio_4_3 : ratio_16_9) :
                 typeof ViewfinderResolution_4_3 !== "undefined" ? ratio_4_3 : ratio_16_9
 
             readonly property int portraitWidth: Math.floor((parent.height/parent.width > ratio) ? parent.width : parent.height/ratio)
@@ -207,13 +211,13 @@ Page {
             onYChanged: updateViewFinderPosition()
 
             onViewfinderResolutionChanged: {
-                if (viewFinder && viewfinderResolution && canSwitchResolutions) {
-                    viewFinder.viewfinderResolution = viewfinderResolution
+                if (_viewFinder && viewfinderResolution && canSwitchResolutions) {
+                    _viewFinder.viewfinderResolution = viewfinderResolution
                 }
             }
 
             function updateViewFinderPosition() {
-                scanner.viewFinderRect = Qt.rect(x + parent.x, y + parent.y, viewFinder ? viewFinder.width : width, viewFinder ? viewFinder.height : height)
+                scanner.viewFinderRect = Qt.rect(x + parent.x, y + parent.y, _viewFinder ? _viewFinder.width : width, _viewFinder ? _viewFinder.height : height)
             }
         }
     }
@@ -248,16 +252,40 @@ Page {
             maximumValue: YubiKeySettings.maxZoom
             value: 1.0
             stepSize: (maximumValue - minimumValue)/100
+
             onValueChanged: {
                 YubiKeySettings.scanZoom = value
-                if (viewFinder) {
-                    viewFinder.digitalZoom = value
+                if (_viewFinder) {
+                    _viewFinder.digitalZoom = value
                 }
             }
+
             Component.onCompleted: {
                 value = YubiKeySettings.scanZoom
-                if (viewFinder) {
-                    viewFinder.digitalZoom = value
+                if (_viewFinder) {
+                    _viewFinder.digitalZoom = value
+                }
+            }
+
+            function zoomIn() {
+                if (value < maximumValue) {
+                    var newValue = value + stepSize
+                    if (newValue < maximumValue) {
+                        value = newValue
+                    } else {
+                        value = maximumValue
+                    }
+                }
+            }
+
+            function zoomOut() {
+                if (value > minimumValue) {
+                    var newValue = value - stepSize
+                    if (newValue > minimumValue) {
+                        value = newValue
+                    } else {
+                        value = minimumValue
+                    }
                 }
             }
         }
@@ -288,6 +316,31 @@ Page {
 
     HarbourSingleImageProvider {
         id: markImageProvider
+    }
+
+    MediaKey{
+        enabled: _canUseVolumeKeys
+        key: Qt.Key_VolumeUp
+        onPressed: zoomSlider.zoomIn()
+        onRepeat: zoomSlider.zoomIn()
+    }
+
+    MediaKey{
+        enabled: _canUseVolumeKeys
+        key: Qt.Key_VolumeDown
+        onPressed: zoomSlider.zoomOut()
+        onRepeat: zoomSlider.zoomOut()
+    }
+
+    Permissions{
+        autoRelease: true
+        applicationClass: "camera"
+        enabled: _canUseVolumeKeys
+
+        Resource{
+            type: Resource.ScaleButton
+            optional: true
+        }
     }
 
     states: [

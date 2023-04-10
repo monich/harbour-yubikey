@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -50,6 +50,7 @@ class YubiKeySettings :
     Q_DISABLE_COPY(YubiKeySettings)
     Q_PROPERTY(qreal scanZoom READ scanZoom WRITE setScanZoom NOTIFY scanZoomChanged)
     Q_PROPERTY(qreal maxZoom READ maxZoom WRITE setMaxZoom NOTIFY maxZoomChanged)
+    Q_PROPERTY(bool volumeZoom READ volumeZoom WRITE setVolumeZoom NOTIFY volumeZoomChanged)
 
 public:
     explicit YubiKeySettings(QObject* aParent = Q_NULLPTR);
@@ -64,9 +65,13 @@ public:
     qreal maxZoom() const;
     void setMaxZoom(qreal);
 
+    bool volumeZoom() const;
+    void setVolumeZoom(bool);
+
 Q_SIGNALS:
     void maxZoomChanged();
     void scanZoomChanged();
+    void volumeZoomChanged();
 
 private:
     class Private;

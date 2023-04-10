@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -45,9 +45,11 @@
 #define DCONF_KEY(x)                YUBIKEY_DCONF_ROOT x
 #define KEY_MAX_ZOOM                DCONF_KEY("maxZoom")
 #define KEY_SCAN_ZOOM               DCONF_KEY("scanZoom")
+#define KEY_VOLUME_ZOOM             DCONF_KEY("volumeZoom")
 
 #define DEFAULT_MAX_ZOOM            10.f
 #define DEFAULT_SCAN_ZOOM           3.f
+#define DEFAULT_VOLUME_ZOOM         true
 
 // ==========================================================================
 // YubiKeySettings::Private
@@ -63,16 +65,20 @@ public:
 public:
     MGConfItem* iMaxZoom;
     MGConfItem* iScanZoom;
+    MGConfItem* iVolumeZoom;
 };
 
 YubiKeySettings::Private::Private(YubiKeySettings* aParent) :
     iMaxZoom(new MGConfItem(KEY_MAX_ZOOM, aParent)),
-    iScanZoom(new MGConfItem(KEY_SCAN_ZOOM, aParent))
+    iScanZoom(new MGConfItem(KEY_SCAN_ZOOM, aParent)),
+    iVolumeZoom(new MGConfItem(KEY_VOLUME_ZOOM, aParent))
 {
     QObject::connect(iMaxZoom, SIGNAL(valueChanged()),
         aParent, SIGNAL(maxZoomChanged()));
     QObject::connect(iScanZoom, SIGNAL(valueChanged()),
         aParent, SIGNAL(scanZoomChanged()));
+    QObject::connect(iVolumeZoom, SIGNAL(valueChanged()),
+        aParent, SIGNAL(volumeZoomChanged()));
 }
 
 // ==========================================================================
@@ -129,4 +135,20 @@ YubiKeySettings::setMaxZoom(
 {
     HDEBUG(aValue);
     iPrivate->iMaxZoom->set(aValue);
+}
+
+// volumeZoom
+
+bool
+YubiKeySettings::volumeZoom() const
+{
+    return iPrivate->iVolumeZoom->value(DEFAULT_VOLUME_ZOOM).toBool();
+}
+
+void
+YubiKeySettings::setVolumeZoom(
+    bool aValue)
+{
+    HDEBUG(aValue);
+    iPrivate->iVolumeZoom->set(aValue);
 }

@@ -56,7 +56,7 @@
     <message id="yubikey-menu-rename">
         <source>Rename</source>
         <extracomment>Generic menu item</extracomment>
-        <translation type="unfinished">Döp om</translation>
+        <translation>Byt namn</translation>
     </message>
     <message id="yubikey-menu-delete">
         <source>Delete</source>
@@ -86,7 +86,7 @@
     <message id="yubikey-menu-edit">
         <source>Edit</source>
         <extracomment>Generic menu item</extracomment>
-        <translation type="unfinished">Redigera</translation>
+        <translation>Redigera</translation>
     </message>
     <message id="yubikey-status-waiting_to_reset">
         <source>Touch the same YubiKey to reset it</source>
@@ -121,7 +121,7 @@
     <message id="yubikey-info-serial">
         <source>Serial: %1</source>
         <extracomment>Card info label</extracomment>
-        <translation type="unfinished">Serienummer: %1</translation>
+        <translation>Serienummer: %1</translation>
     </message>
     <message id="yubikey-info-no_creds">
         <source>No credentials are stored on this YubiKey</source>
@@ -196,7 +196,7 @@
     <message id="yubikey-wait-put_selected_tokens">
         <source>Touch YubiKey to save the selected tokens</source>
         <extracomment>Status label</extracomment>
-        <translation type="unfinished">Håll telefonen mot YubiKey för att spara de valda tokens</translation>
+        <translation>Håll telefonen mot YubiKey för att spara de valda tokens</translation>
     </message>
     <message id="yubikey-add_token-save">
         <source>Save</source>
@@ -331,32 +331,32 @@
     <message id="yubikey-select_dialog-title">
         <source>Select tokens</source>
         <extracomment>Dialog title</extracomment>
-        <translation type="unfinished">Välj tokens</translation>
+        <translation>Välj token</translation>
     </message>
     <message id="yubikey-rename_token-prompt">
         <source>Enter new name for %1</source>
         <extracomment>Input prompt to rename the token</extracomment>
-        <translation type="unfinished">Ange ett nytt namn för %1</translation>
+        <translation>Ange ett nytt namn för %1</translation>
     </message>
     <message id="yubikey-rename_token-placeholder">
         <source>Enter new name</source>
         <extracomment>Placeholder for the new token name</extracomment>
-        <translation type="unfinished">Ange nytt namn</translation>
+        <translation>Ange nytt namn</translation>
     </message>
     <message id="yubikey-rename_token-duplicate_name">
         <source>Duplicate name</source>
         <extracomment>Label for a duplicate token name</extracomment>
-        <translation type="unfinished">Dubblettnamn</translation>
+        <translation>Dubblettnamn</translation>
     </message>
     <message id="yubikey-rename_token-button">
         <source>Rename</source>
         <extracomment>Button label (rename token)</extracomment>
-        <translation type="unfinished">Döp om</translation>
+        <translation>Byt namn</translation>
     </message>
     <message id="yubikey-wait-rename_token">
         <source>Touch the same YubiKey to rename the token</source>
         <extracomment>Status label</extracomment>
-        <translation type="unfinished">Håll telefonen mot samma YubiKey för att byta namn på token</translation>
+        <translation>Håll telefonen mot samma YubiKey för att byta namn på token</translation>
     </message>
 </context>
 </TS>

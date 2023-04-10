@@ -53,6 +53,11 @@
         <extracomment>Context menu item (copy password to clipboard)</extracomment>
         <translation>Copy password</translation>
     </message>
+    <message id="yubikey-menu-rename">
+        <source>Rename</source>
+        <extracomment>Generic menu item</extracomment>
+        <translation>Rename</translation>
+    </message>
     <message id="yubikey-menu-delete">
         <source>Delete</source>
         <extracomment>Generic menu item</extracomment>
@@ -327,6 +332,31 @@
         <source>Select tokens</source>
         <extracomment>Dialog title</extracomment>
         <translation>Select tokens</translation>
+    </message>
+    <message id="yubikey-rename_token-prompt">
+        <source>Enter new name for %1</source>
+        <extracomment>Input prompt to rename the token</extracomment>
+        <translation>Enter new name for %1</translation>
+    </message>
+    <message id="yubikey-rename_token-placeholder">
+        <source>Enter new name</source>
+        <extracomment>Placeholder for the new token name</extracomment>
+        <translation>Enter new name</translation>
+    </message>
+    <message id="yubikey-rename_token-duplicate_name">
+        <source>Duplicate name</source>
+        <extracomment>Label for a duplicate token name</extracomment>
+        <translation>Duplicate name</translation>
+    </message>
+    <message id="yubikey-rename_token-button">
+        <source>Rename</source>
+        <extracomment>Button label (rename token)</extracomment>
+        <translation>Rename</translation>
+    </message>
+    <message id="yubikey-wait-rename_token">
+        <source>Touch the same YubiKey to rename the token</source>
+        <extracomment>Status label</extracomment>
+        <translation>Touch the same YubiKey to rename the token</translation>
     </message>
 </context>
 </TS>

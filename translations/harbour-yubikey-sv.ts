@@ -53,6 +53,11 @@
         <extracomment>Context menu item (copy password to clipboard)</extracomment>
         <translation>Kopiera lösenord</translation>
     </message>
+    <message id="yubikey-menu-rename">
+        <source>Rename</source>
+        <extracomment>Generic menu item</extracomment>
+        <translation type="unfinished">Döp om</translation>
+    </message>
     <message id="yubikey-menu-delete">
         <source>Delete</source>
         <extracomment>Generic menu item</extracomment>
@@ -327,6 +332,31 @@
         <source>Select tokens</source>
         <extracomment>Dialog title</extracomment>
         <translation type="unfinished">Välj tokens</translation>
+    </message>
+    <message id="yubikey-rename_token-prompt">
+        <source>Enter new name for %1</source>
+        <extracomment>Input prompt to rename the token</extracomment>
+        <translation type="unfinished">Ange ett nytt namn för %1</translation>
+    </message>
+    <message id="yubikey-rename_token-placeholder">
+        <source>Enter new name</source>
+        <extracomment>Placeholder for the new token name</extracomment>
+        <translation type="unfinished">Ange nytt namn</translation>
+    </message>
+    <message id="yubikey-rename_token-duplicate_name">
+        <source>Duplicate name</source>
+        <extracomment>Label for a duplicate token name</extracomment>
+        <translation type="unfinished">Dubblettnamn</translation>
+    </message>
+    <message id="yubikey-rename_token-button">
+        <source>Rename</source>
+        <extracomment>Button label (rename token)</extracomment>
+        <translation type="unfinished">Döp om</translation>
+    </message>
+    <message id="yubikey-wait-rename_token">
+        <source>Touch the same YubiKey to rename the token</source>
+        <extracomment>Status label</extracomment>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att byta namn på token</translation>
     </message>
 </context>
 </TS>

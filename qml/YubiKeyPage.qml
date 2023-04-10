@@ -46,6 +46,33 @@ Page {
         }
     }
 
+    function renameToken(tokenName) {
+        var renamePage = pageStack.push("YubiKeyRenameTokenPage.qml", {
+            "tokenList": otpListModel,
+            "allowedOrientations": allowedOrientations,
+            "currentName":  tokenName
+        })
+        renamePage.rename.connect(function(name) {
+            renamePage.forwardNavigation = true
+            if (yubiKey.renameToken(tokenName, name)) {
+                replace()
+            } else {
+                pageStack.push(waitPageComponent, {
+                    //: Status label
+                    //% "Touch the same YubiKey to rename the token"
+                    "text":  qsTrId("yubikey-wait-rename_token"),
+                    "complete": function(page,keyState,waitId,success) {
+                        if (!waitId || !success) {
+                            page.waitForId(yubiKey.renameToken(tokenName, name))
+                        } else {
+                            page.tryAgain()
+                        }
+                    }
+                }).waitDone.connect(replace)
+            }
+        })
+    }
+
     YubiKeyCard {
         id: yubiKey
 
@@ -378,14 +405,17 @@ Page {
                     delegate: YubiKeyAuthListItem {
                         id: delegate
 
+                        readonly property string itemName: model.name
                         readonly property string itemPassword: model.password
                         readonly property bool itemFavorite: model.favorite
                         readonly property bool itemMarkedForRefresh: model.markedForRefresh
                         readonly property bool itemMarkedForDeletion: model.markedForDeletion
                         readonly property bool itemCanCopyPassword: !itemMarkedForRefresh && !itemMarkedForDeletion && itemPassword !== ""
+                        readonly property bool itemCanRename: !itemMarkedForRefresh && !itemMarkedForDeletion &&
+                            yubiKey.yubiKeyVersion >= YubiKeyCard.Version_5_3_0
 
                         landscape: thisPage.isLandscape
-                        name: model.name
+                        name: itemName
                         type: model.type
                         password: itemPassword
                         favorite: itemFavorite
@@ -417,6 +447,16 @@ Page {
                                     onEnabledChanged: contextMenu.updateVisibility()
                                     enabled: delegate.itemCanCopyPassword
                                     onClicked: delegate.copyPassword()
+                                }
+                                MenuItem {
+                                    id: renameMenuItem
+
+                                    //: Generic menu item
+                                    //% "Rename"
+                                    text: qsTrId("yubikey-menu-rename")
+                                    onEnabledChanged: contextMenu.updateVisibility()
+                                    enabled: delegate.itemCanRename
+                                    onClicked: renameToken(itemName)
                                 }
                                 MenuItem {
                                     id: deleteMenuItem
@@ -463,6 +503,7 @@ Page {
                                 function updateVisibility() {
                                     if (!menuExpanded) {
                                         copyMenuItem.visible = copyMenuItem.enabled
+                                        renameMenuItem.visible = renameMenuItem.enabled
                                         deleteMenuItem.visible = deleteMenuItem.enabled
                                         cancelMenuItem.visible = cancelMenuItem.enabled
                                         favoriteMenuItem.visible = favoriteMenuItem.enabled
@@ -548,10 +589,10 @@ Page {
                         horizontalAlignment: Text.AlignHCenter
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.secondaryHighlightColor
-                        visible: yubiKey.yubiKeyVersion !== ""
+                        visible: yubiKey.yubiKeyVersionString !== ""
                         //: Card info label
                         //% "Version: %1"
-                        text: qsTrId("yubikey-info-version").arg(yubiKey.yubiKeyVersion)
+                        text: qsTrId("yubikey-info-version").arg(yubiKey.yubiKeyVersionString)
                     }
 
                     Label {

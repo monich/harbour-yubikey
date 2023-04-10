@@ -39,6 +39,7 @@
 #define _YUBIKEY_SETTINGS_H
 
 #include <QObject>
+#include <QSize>
 
 class QQmlEngine;
 class QJSEngine;
@@ -51,6 +52,11 @@ class YubiKeySettings :
     Q_PROPERTY(qreal scanZoom READ scanZoom WRITE setScanZoom NOTIFY scanZoomChanged)
     Q_PROPERTY(qreal maxZoom READ maxZoom WRITE setMaxZoom NOTIFY maxZoomChanged)
     Q_PROPERTY(bool volumeZoom READ volumeZoom WRITE setVolumeZoom NOTIFY volumeZoomChanged)
+    Q_PROPERTY(bool wideScan READ wideScan WRITE setWideScan NOTIFY wideScanChanged)
+    Q_PROPERTY(qreal wideCameraRatio READ wideCameraRatio CONSTANT)
+    Q_PROPERTY(qreal narrowCameraRatio READ narrowCameraRatio CONSTANT)
+    Q_PROPERTY(QSize wideCameraResolution READ wideCameraResolution WRITE setWideCameraResolution NOTIFY wideCameraResolutionChanged)
+    Q_PROPERTY(QSize narrowCameraResolution READ narrowCameraResolution WRITE setNarrowCameraResolution NOTIFY narrowCameraResolutionChanged)
 
 public:
     explicit YubiKeySettings(QObject* aParent = Q_NULLPTR);
@@ -68,10 +74,24 @@ public:
     bool volumeZoom() const;
     void setVolumeZoom(bool);
 
+    bool wideScan() const;
+    void setWideScan(bool);
+
+    qreal wideCameraRatio() const;
+    QSize wideCameraResolution() const;
+    void setWideCameraResolution(QSize);
+
+    qreal narrowCameraRatio() const;
+    QSize narrowCameraResolution() const;
+    void setNarrowCameraResolution(QSize);
+
 Q_SIGNALS:
     void maxZoomChanged();
     void scanZoomChanged();
     void volumeZoomChanged();
+    void wideScanChanged();
+    void wideCameraResolutionChanged();
+    void narrowCameraResolutionChanged();
 
 private:
     class Private;

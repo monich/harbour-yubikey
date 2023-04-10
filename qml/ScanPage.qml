@@ -185,15 +185,16 @@ Page {
         Rectangle {
             id: viewFinderContainer
 
-            readonly property real ratio_4_3: 4./3.
-            readonly property real ratio_16_9: 16./9.
-            readonly property bool canSwitchResolutions: typeof ViewfinderResolution_4_3 !== "undefined" &&
-                typeof ViewfinderResolution_16_9 !== "undefined"
+            readonly property bool canSwitchResolutions:
+                YubiKeySettings.wideCameraResolution.width > 0 && YubiKeySettings.wideCameraResolution.height > 0 &&
+                YubiKeySettings.narrowCameraResolution.width > 0 && YubiKeySettings.narrowCameraResolution.height > 0
             readonly property size viewfinderResolution: canSwitchResolutions ?
-                (YubiKeySettings.scanWideMode ? ViewfinderResolution_4_3 : ViewfinderResolution_16_9) :
+                (YubiKeySettings.wideScan ? YubiKeySettings.wideCameraResolution : YubiKeySettings.narrowCameraResolution) :
                 Qt.size(0,0)
-            readonly property real ratio: canSwitchResolutions ? (YubiKeySettings.scanWideMode ? ratio_4_3 : ratio_16_9) :
-                typeof ViewfinderResolution_4_3 !== "undefined" ? ratio_4_3 : ratio_16_9
+            readonly property real ratio: canSwitchResolutions ?
+                (YubiKeySettings.wideScan ? YubiKeySettings.wideCameraRatio : YubiKeySettings.narrowCameraRatio) :
+                (YubiKeySettings.wideCameraResolution.width > 0 && YubiKeySettings.wideCameraResolution.height > 0) ?
+                YubiKeySettings.wideCameraRatio : YubiKeySettings.narrowCameraRatio
 
             readonly property int portraitWidth: Math.floor((parent.height/parent.width > ratio) ? parent.width : parent.height/ratio)
             readonly property int portraitHeight: Math.floor((parent.height/parent.width > ratio) ? (parent.width * ratio) : parent.height)
@@ -218,6 +219,24 @@ Page {
 
             function updateViewFinderPosition() {
                 scanner.viewFinderRect = Qt.rect(x + parent.x, y + parent.y, _viewFinder ? _viewFinder.width : width, _viewFinder ? _viewFinder.height : height)
+            }
+
+            function updateSupportedResolution_4_3(res) {
+                if (res.width > YubiKeySettings.wideCameraResolution.width) {
+                    YubiKeySettings.wideCameraResolution = res
+                }
+            }
+
+            function updateSupportedResolution_16_9(res) {
+                if (res.width > YubiKeySettings.narrowCameraResolution.width) {
+                    YubiKeySettings.narrowCameraResolution = res
+                }
+            }
+
+            Connections {
+                target: _viewFinder
+                onSupportedWideResolutionChanged: viewFinderContainer.updateSupportedResolution_4_3(_viewFinder.supportedWideResolution)
+                onSupportedNarrowResolutionChanged: viewFinderContainer.updateSupportedResolution_16_9(_viewFinder.supportedNarrowResolution)
             }
         }
     }

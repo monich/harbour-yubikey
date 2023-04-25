@@ -860,7 +860,18 @@ YubiKeyAuthListModel::setAuthData(
                     const uint off = data.bytes[data.size - 1] & 0x0f;
                     const uint miniHash = be32toh(*(guint32*)(data.bytes + off)) & 0x7fffffff;
                     const uint pass = miniHash % maxPass;
-                    const QString strPass(QString().sprintf("%0*u", digits, pass));
+
+                    QString strPass(QString().sprintf("%0*u", digits, pass));
+
+                    if (entry->iName.startsWith("Steam:")) {
+                        const QString alphabet = QString("23456789BCDFGHJKMNPQRTVWXY");
+                        strPass.resize(5);
+                        uint steamPass = miniHash;
+                        for (int i = 0; i < 5; i++) {
+                            strPass[i] = alphabet.at(steamPass%alphabet.size());
+                            steamPass /= alphabet.size();
+                        }
+                    }
 
                     roles.resize(0);
                     // Refresh is considered done even if the code didn't change

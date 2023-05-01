@@ -108,6 +108,7 @@ Page {
         }
         onYubiKeyReset: thisPage.yubiKeyReset()
         onTotpCodesExpired: otpListModel.totpCodesExpired()
+        onTokenRenamed: otpListModel.tokenRenamed(from, to)
     }
 
     Buzz {

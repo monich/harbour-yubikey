@@ -67,6 +67,7 @@ HEADERS += \
     src/YubiKeyAuth.h \
     src/YubiKeyAuthListModel.h \
     src/YubiKeyCard.h \
+    src/YubiKeyCardSettings.h \
     src/YubiKeyDefs.h \
     src/YubiKeyConstants.h \
     src/YubiKeyImportModel.h \
@@ -85,6 +86,7 @@ SOURCES += \
     src/YubiKeyAuth.cpp \
     src/YubiKeyAuthListModel.cpp \
     src/YubiKeyCard.cpp \
+    src/YubiKeyCardSettings.cpp \
     src/YubiKeyImportModel.cpp \
     src/YubiKeyRecognizer.cpp \
     src/YubiKeyTag.cpp \

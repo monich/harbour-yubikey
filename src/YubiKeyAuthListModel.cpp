@@ -8,42 +8,37 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING
+ * IN ANY WAY OUT OF THE USE OR INABILITY TO USE THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * The views and conclusions contained in the software and documentation
  * are those of the authors and should not be interpreted as representing
  * any official policies, either expressed or implied.
  */
 
-#include "YubiKeyConstants.h"
 #include "YubiKeyAuthListModel.h"
+#include "YubiKeyCardSettings.h"
+#include "YubiKeyConstants.h"
 #include "YubiKeyUtil.h"
 
 #include "HarbourDebug.h"
-
-#include <QDir>
-#include <QSettings>
-#include <QCryptographicHash>
 
 #include <ctype.h>
 
@@ -107,8 +102,6 @@ public:
 
     QVariant get(Role) const;
 
-    static QString nameHashUtf8(const QByteArray&);
-    static QString nameHash(const QString&);
     static YubiKeyTokenType toAuthType(uchar);
     static YubiKeyAlgorithm toAuthAlgorithm(uchar);
 
@@ -131,7 +124,7 @@ YubiKeyAuthListModel::ModelData::ModelData(
     YubiKeyAlgorithm aAlgorithm) :
     iUtf8Name(aUtf8Name),
     iName(QString::fromUtf8(aUtf8Name)),
-    iNameHash(nameHashUtf8(aUtf8Name)),
+    iNameHash(YubiKeyUtil::nameHashUtf8(aUtf8Name)),
     iType(aType),
     iAlgorithm(aAlgorithm),
     iFavorite(false),
@@ -157,19 +150,6 @@ YubiKeyAuthListModel::ModelData::get(
     case MarkedForDeletionRole: return iMark == MarkForDeletion;
     }
     return QVariant();
-}
-
-QString
-YubiKeyAuthListModel::ModelData::nameHashUtf8(
-    const QByteArray& aUtf8)
-{
-    return QCryptographicHash::hash(aUtf8, QCryptographicHash::Sha1).toHex();
-}
-
-QString
-YubiKeyAuthListModel::ModelData::nameHash(const QString& aName)
-{
-    return nameHashUtf8(aName.toUtf8());
 }
 
 YubiKeyTokenType
@@ -317,9 +297,6 @@ public:
         SignalCount
     };
 
-    static const QString SETTINGS_FILE;
-    static const QString FAVORITE_ENTRY;
-
 public:
     Private(YubiKeyAuthListModel*);
     ~Private();
@@ -336,7 +313,7 @@ public:
     void updateMarkedForRefresh();
     void updateMarkedForDeletion();
     void markChanged(ModelData::Mark, QVector<int>*);
-    QString getFavoriteName();
+    QString getFavoriteHash();
     QVector<int> toggleMark(ModelData*, ModelData::Mark, bool);
     QStringList marked(ModelData::Mark aMark);
 
@@ -344,8 +321,7 @@ public:
     SignalMask iQueuedSignals;
     Signal iFirstQueuedSignal;
     YubiKeyAuthListModel* iModel;
-    QDir iConfigDir;
-    QSettings* iSettings;
+    YubiKeyCardSettings* iCardSettings;
     QString iYubiKeyId;
     QString iHexAuthList;
     QString iHexAuthData;
@@ -362,16 +338,12 @@ public:
 };
 
 
-const QString YubiKeyAuthListModel::Private::SETTINGS_FILE("settings");
-const QString YubiKeyAuthListModel::Private::FAVORITE_ENTRY("Favorite");
-
 YubiKeyAuthListModel::Private::Private(
     YubiKeyAuthListModel* aModel) :
     iQueuedSignals(0),
     iFirstQueuedSignal(SignalCount),
     iModel(aModel),
-    iConfigDir(YubiKeyUtil::configDir()),
-    iSettings(Q_NULLPTR),
+    iCardSettings(Q_NULLPTR),
     iFavoriteTokenType(YubiKeyTokenType_Unknown),
     iFavoriteMarkedForRefresh(false),
     iFavoritePasswordExpired(false),
@@ -381,7 +353,7 @@ YubiKeyAuthListModel::Private::Private(
 
 YubiKeyAuthListModel::Private::~Private()
 {
-    delete iSettings;
+    delete iCardSettings;
     qDeleteAll(iList);
 }
 
@@ -429,36 +401,9 @@ YubiKeyAuthListModel::Private::emitQueuedSignals()
 }
 
 QString
-YubiKeyAuthListModel::Private::getFavoriteName()
+YubiKeyAuthListModel::Private::getFavoriteHash()
 {
-    if (iSettings) {
-        QString favorite(iSettings->value(FAVORITE_ENTRY).toString());
-        const int len = favorite.length();
-
-        if (len > 0) {
-            // Favorite name was originally stored in plain text
-            static const int Sha1Len = 20 * 2; // 2 hex digits per byte
-            bool isSha1 = false;
-
-            if (len == Sha1Len) {
-                isSha1 = true;
-                const QChar* chars = favorite.constData();
-                for (int i = 0; i < len && isSha1; i++) {
-                    isSha1 = isxdigit(chars[i].unicode());
-                }
-            }
-            if (isSha1) {
-                return favorite;
-            } else {
-                QString hash(ModelData::nameHash(favorite));
-
-                HDEBUG("Replacing favorite name" << favorite << "with" << hash);
-                iSettings->setValue(FAVORITE_ENTRY, hash);
-                return hash;
-            }
-        }
-    }
-    return QString();
+    return iCardSettings ? iCardSettings->favoriteHash() : QString();
 }
 
 void
@@ -468,18 +413,13 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
     if (iYubiKeyId != aYubiKeyId) {
         iYubiKeyId = aYubiKeyId;
         queueSignal(SignalYubiKeyIdChanged);
-        delete iSettings;
+        delete iCardSettings;
         if (iYubiKeyId.isEmpty()) {
-            iSettings = Q_NULLPTR;
+            iCardSettings = Q_NULLPTR;
         } else {
-            const QString settingsFile(iConfigDir.absoluteFilePath(iYubiKeyId) +
-                QDir::separator() + SETTINGS_FILE);
+            iCardSettings = new YubiKeyCardSettings(iYubiKeyId);
 
-            HDEBUG("Settings" << qPrintable(settingsFile));
-            iConfigDir.mkpath(".");
-            iSettings = new QSettings(settingsFile, QSettings::IniFormat);
-
-            const QString favoriteName(getFavoriteName());
+            const QString favoriteHash(iCardSettings->favoriteHash());
             const QVector<int> roles(1, ModelData::FavoriteRole);
             QString realFavoriteName, favoritePassword;
             YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
@@ -489,8 +429,8 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
             for (int i = 0; i < iList.count(); i++) {
                 ModelData* entry = iList.at(i);
 
-                if (entry->iNameHash == favoriteName) {
-                    realFavoriteName = favoriteName;
+                if (entry->iNameHash == favoriteHash) {
+                    realFavoriteName = entry->iName;
                     favoritePassword = entry->iPassword;
                     favoriteTokenType = entry->iType;
                     favoriteExpired = entry->iExpired;
@@ -534,15 +474,15 @@ YubiKeyAuthListModel::Private::setItems(
     iMarkedForRefresh.clear();
     iMarkedForDeletion.clear();
 
+    const QString favoriteHash(getFavoriteHash());
     bool favoriteExpired = false, favoriteMfR = false;
     YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
     QString realFavoriteName, favoritePassword;
-    const QString favoriteName(getFavoriteName());
 
     for (int i = 0; i < n; i++) {
         ModelData* entry = iList.at(i);
 
-        entry->iFavorite = (entry->iNameHash == favoriteName);
+        entry->iFavorite = (entry->iNameHash == favoriteHash);
         if (entry->iFavorite) {
             realFavoriteName = entry->iName;
             favoritePassword = entry->iPassword;
@@ -1014,6 +954,19 @@ YubiKeyAuthListModel::totpCodesExpired()
     }
 }
 
+void
+YubiKeyAuthListModel::tokenRenamed(
+    const QString aFrom,
+    const QString aTo)
+{
+    // There is a refresh after each rename, the new (renamed) token will
+    // be recognized as a favorite
+    HDEBUG(aFrom << "=>" << aTo);
+    if (iPrivate->iCardSettings) {
+        iPrivate->iCardSettings->tokenRenamed(aFrom, aTo);
+    }
+}
+
 bool
 YubiKeyAuthListModel::containsName(
     const QString aName) const
@@ -1072,19 +1025,15 @@ YubiKeyAuthListModel::setData(
             b = aValue.toBool();
             HDEBUG(aIndex.row() << "favorite" << b);
             if (data->iFavorite != b) {
-                QSettings* settings = iPrivate->iSettings;
-
                 roles.append(aRole);
                 data->iFavorite = b;
-
-                if (settings) {
+                if (iPrivate->iCardSettings) {
                     if (b) {
-                        settings->setValue(Private::FAVORITE_ENTRY, data->iNameHash);
+                        iPrivate->iCardSettings->setFavoriteHash(data->iNameHash);
                     } else {
-                        settings->remove(Private::FAVORITE_ENTRY);
+                        iPrivate->iCardSettings->clearFavorite();
                     }
                 }
-
                 if (b) {
                     // There is only one favorite
                     iPrivate->setFavoriteName(data->iName);

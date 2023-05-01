@@ -46,6 +46,7 @@
 #define MODEL_ROLES_(first,role,last) \
     first(Name,name) \
     role(Type,type) \
+    role(Steam,steam) \
     role(Algorithm,algorithm) \
     role(Password,password) \
     role(Favorite,favorite) \
@@ -101,6 +102,8 @@ public:
     ModelData(const QByteArray, YubiKeyTokenType, YubiKeyAlgorithm);
 
     QVariant get(Role) const;
+    bool canBeSteamToken() const;
+    bool updatePassword();
 
     static YubiKeyTokenType toAuthType(uchar);
     static YubiKeyAlgorithm toAuthAlgorithm(uchar);
@@ -109,12 +112,16 @@ public:
     const QByteArray iUtf8Name;
     const QString iName;
     const QString iNameHash;
+    const QString iSteamHash;
     const YubiKeyTokenType iType;
     const YubiKeyAlgorithm iAlgorithm;
     QString iPassword;
+    bool iSteam;
     bool iFavorite;
     bool iExpired;
     bool iRefreshable;
+    uint iDigits;
+    uint iMiniHash;
     Mark iMark;
 };
 
@@ -124,12 +131,16 @@ YubiKeyAuthListModel::ModelData::ModelData(
     YubiKeyAlgorithm aAlgorithm) :
     iUtf8Name(aUtf8Name),
     iName(QString::fromUtf8(aUtf8Name)),
-    iNameHash(YubiKeyUtil::nameHashUtf8(aUtf8Name)),
+    iNameHash(YubiKeyUtil::hashUtf8(aUtf8Name)),
+    iSteamHash(YubiKeyUtil::steamHashUtf8(aUtf8Name)),
     iType(aType),
     iAlgorithm(aAlgorithm),
+    iSteam(false),
     iFavorite(false),
     iExpired(false),
     iRefreshable(aType == YubiKeyTokenType_HOTP),
+    iDigits(0),
+    iMiniHash(0),
     iMark(MarkNone)
 {
 }
@@ -141,6 +152,7 @@ YubiKeyAuthListModel::ModelData::get(
     switch (aRole) {
     case NameRole: return iName;
     case TypeRole: return iType;
+    case SteamRole: return iSteam;
     case AlgorithmRole: return iAlgorithm;
     case PasswordRole: return iPassword;
     case FavoriteRole: return iFavorite;
@@ -150,6 +162,44 @@ YubiKeyAuthListModel::ModelData::get(
     case MarkedForDeletionRole: return iMark == MarkForDeletion;
     }
     return QVariant();
+}
+
+bool
+YubiKeyAuthListModel::ModelData::canBeSteamToken() const
+{
+    return iType == YubiKeyTokenType_TOTP;
+}
+
+bool
+YubiKeyAuthListModel::ModelData::updatePassword()
+{
+    QString strPass;
+
+    if (iSteam) {
+        static const QString ALPHABET("23456789BCDFGHJKMNPQRTVWXY");
+        uint pass = iMiniHash;
+        // Steam codes always have 5 symbols, ignore the digit count.
+        // And YubiKey requires the number of digits to be at least 6,
+        // PUT command with 5 digits fails with code 6A80 (Wrong syntax)
+        for (uint i = 0; i < 5; i++) {
+            strPass.append(ALPHABET.at(pass % ALPHABET.size()));
+            pass /= ALPHABET.size();
+        }
+    } else {
+        uint maxPass = 10;
+        for (uint i = 1; i < iDigits; i++) {
+            maxPass *= 10;
+        }
+        const uint pass = iMiniHash % maxPass;
+        strPass = QString().sprintf("%0*u", iDigits, pass);
+    }
+
+    if (iPassword != strPass) {
+        iPassword = strPass;
+        return true;
+    } else {
+        return false;
+    }
 }
 
 YubiKeyTokenType
@@ -315,7 +365,7 @@ public:
     void markChanged(ModelData::Mark, QVector<int>*);
     QString getFavoriteHash();
     QVector<int> toggleMark(ModelData*, ModelData::Mark, bool);
-    QStringList marked(ModelData::Mark aMark);
+    QStringList marked(ModelData::Mark);
 
 public:
     SignalMask iQueuedSignals;
@@ -336,7 +386,6 @@ public:
     QStringList iMarkedForDeletion;
     bool iHaveExpiringTotpCodes;
 };
-
 
 YubiKeyAuthListModel::Private::Private(
     YubiKeyAuthListModel* aModel) :
@@ -420,14 +469,16 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
             iCardSettings = new YubiKeyCardSettings(iYubiKeyId);
 
             const QString favoriteHash(iCardSettings->favoriteHash());
-            const QVector<int> roles(1, ModelData::FavoriteRole);
             QString realFavoriteName, favoritePassword;
             YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
             bool favoriteExpired = false, favoriteMfR = false;
+            QVector<int> roles;
 
             // Update the roles to match the settings
             for (int i = 0; i < iList.count(); i++) {
                 ModelData* entry = iList.at(i);
+
+                roles.resize(0);
 
                 if (entry->iNameHash == favoriteHash) {
                     realFavoriteName = entry->iName;
@@ -436,15 +487,27 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
                     favoriteExpired = entry->iExpired;
                     favoriteMfR = (entry->iMark == ModelData::MarkForRefresh);
                     if (!entry->iFavorite) {
-                        const QModelIndex idx(iModel->index(i));
-
                         entry->iFavorite = true;
-                        Q_EMIT iModel->dataChanged(idx, idx, roles);
+                        roles.append(ModelData::FavoriteRole);
                     }
                 } else if (entry->iFavorite) {
+                    entry->iFavorite = false;
+                    roles.append(ModelData::FavoriteRole);
+                }
+
+                if (iCardSettings->isSteamHash(entry->iSteamHash)) {
+                    if (!entry->iSteam) {
+                        entry->iSteam = true;
+                        roles.append(ModelData::SteamRole);
+                    }
+                } else if (entry->iSteam) {
+                    entry->iSteam = false;
+                    roles.append(ModelData::SteamRole);
+                }
+
+                if (!roles.isEmpty()) {
                     const QModelIndex idx(iModel->index(i));
 
-                    entry->iFavorite = false;
                     Q_EMIT iModel->dataChanged(idx, idx, roles);
                 }
             }
@@ -454,6 +517,9 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
             setFavoritePassword(favoritePassword);
             setFavoritePasswordExpired(favoriteExpired);
             setFavoriteMarkedForRefresh(favoriteMfR);
+            if (realFavoriteName.isEmpty()) {
+                iCardSettings->clearFavorite();
+            }
         }
     }
 }
@@ -478,9 +544,16 @@ YubiKeyAuthListModel::Private::setItems(
     bool favoriteExpired = false, favoriteMfR = false;
     YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
     QString realFavoriteName, favoritePassword;
+    QStringList steamHashes;
 
     for (int i = 0; i < n; i++) {
         ModelData* entry = iList.at(i);
+
+        entry->iSteam = iCardSettings &&
+            iCardSettings->isSteamHash(entry->iSteamHash);
+        if (entry->iSteam) {
+            steamHashes.append(entry->iSteamHash);
+        }
 
         entry->iFavorite = (entry->iNameHash == favoriteHash);
         if (entry->iFavorite) {
@@ -517,6 +590,13 @@ YubiKeyAuthListModel::Private::setItems(
     }
     if (hadExpiringTotpCodes != iHaveExpiringTotpCodes) {
         queueSignal(SignalHaveExpiringTotpCodesChanged);
+    }
+    if (iCardSettings) {
+        steamHashes.sort();
+        iCardSettings->setSteamHashes(steamHashes);
+        if (realFavoriteName.isEmpty()) {
+            iCardSettings->clearFavorite();
+        }
     }
 }
 
@@ -788,19 +868,13 @@ YubiKeyAuthListModel::setAuthData(
                     ModelData* entry = iPrivate->iList.at(currentPos);
 
                     // First byte: Number of digits in the OATH code
-                    const uint digits = data.bytes[0];
-                    uint maxPass = 10;
-                    for (uint i = 1; i < digits; i++) {
-                        maxPass *= 10;
-                    }
+                    entry->iDigits = data.bytes[0];
 
                     // The rest is the calculated hash
                     data.bytes++;
                     data.size--;
                     const uint off = data.bytes[data.size - 1] & 0x0f;
-                    const uint miniHash = be32toh(*(guint32*)(data.bytes + off)) & 0x7fffffff;
-                    const uint pass = miniHash % maxPass;
-                    const QString strPass(QString().sprintf("%0*u", digits, pass));
+                    entry->iMiniHash = be32toh(*(guint32*)(data.bytes + off)) & 0x7fffffff;
 
                     roles.resize(0);
                     // Refresh is considered done even if the code didn't change
@@ -809,12 +883,11 @@ YubiKeyAuthListModel::setAuthData(
                         roles.append(ModelData::MarkedForRefreshRole);
                         refreshMarksUpdated = true;
                     }
-                    if (entry->iPassword != strPass) {
-                        entry->iPassword = strPass;
+                    if (entry->updatePassword()) {
                         roles.append(ModelData::PasswordRole);
-                        HDEBUG((currentPos + 1) << strPass);
+                        HDEBUG((currentPos + 1) << entry->iPassword);
                         if (entry->iFavorite) {
-                            iPrivate->setFavoritePassword(strPass);
+                            iPrivate->setFavoritePassword(entry->iPassword);
                             iPrivate->setFavoritePasswordExpired(false);
                         }
                         if (entry->iExpired) {
@@ -1057,6 +1130,25 @@ YubiKeyAuthListModel::setData(
                     iPrivate->setFavoriteMarkedForRefresh(false);
                 }
                 iPrivate->emitQueuedSignals();
+            }
+            ok = true;
+            break;
+        case ModelData::SteamRole:
+            b = aValue.toBool();
+            HDEBUG(aIndex.row() << "stream" << b);
+            if (data->iSteam != b && (!b || data->canBeSteamToken())) {
+                data->iSteam = b;
+                roles.append(ModelData::SteamRole);
+                if (data->updatePassword()) {
+                    roles.append(ModelData::PasswordRole);
+                }
+                if (iPrivate->iCardSettings) {
+                    if (b) {
+                        iPrivate->iCardSettings->addSteamHash(data->iSteamHash);
+                    } else {
+                        iPrivate->iCardSettings->removeSteamHash(data->iSteamHash);
+                    }
+                }
             }
             ok = true;
             break;

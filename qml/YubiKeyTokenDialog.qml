@@ -78,7 +78,7 @@ Dialog {
 
                     width: counterField.visible ? parent.columnWidth : parent.width
                     //: Text field label (number of password digits)
-                    //% "Digits"
+                    //% "Digits (leave it 6 for Steam tokens)"
                     label: qsTrId("yubikey-token-digits-text")
                     //: Text field placeholder (number of password digits)
                     //% "Number of password digits"

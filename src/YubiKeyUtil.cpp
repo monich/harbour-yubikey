@@ -64,10 +64,22 @@ YubiKeyUtil::configDir(
 }
 
 QString
-YubiKeyUtil::nameHashUtf8(
+YubiKeyUtil::hashUtf8(
     const QByteArray& aUtf8)
 {
     return QCryptographicHash::hash(aUtf8, QCryptographicHash::Sha1).toHex();
+}
+
+QString
+YubiKeyUtil::steamHashUtf8(
+    const QByteArray& aUtf8)
+{
+    // The same name gets a different hash for Steam and Favorite purposes
+    static QByteArray STEAM_PREFIX("steam:");
+    QCryptographicHash hash(QCryptographicHash::Sha1);
+    hash.addData(STEAM_PREFIX);
+    hash.addData(aUtf8);
+    return hash.result().toHex();
 }
 
 uint

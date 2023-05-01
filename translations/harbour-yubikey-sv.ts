@@ -48,10 +48,10 @@
         <extracomment>Pulley menu item</extracomment>
         <translation>Ta bort lösenord</translation>
     </message>
-    <message id="yubikey-menu-copy_password">
-        <source>Copy password</source>
-        <extracomment>Context menu item (copy password to clipboard)</extracomment>
-        <translation>Kopiera lösenord</translation>
+    <message id="yubikey-menu-edit">
+        <source>Edit</source>
+        <extracomment>Generic menu item</extracomment>
+        <translation>Redigera</translation>
     </message>
     <message id="yubikey-menu-rename">
         <source>Rename</source>
@@ -83,10 +83,15 @@
         <extracomment>Context menu item</extracomment>
         <translation>Ta bort från programminiatyr</translation>
     </message>
-    <message id="yubikey-menu-edit">
-        <source>Edit</source>
-        <extracomment>Generic menu item</extracomment>
-        <translation>Redigera</translation>
+    <message id="yubikey-menu-use_as_standard_token">
+        <source>Standard token</source>
+        <extracomment>Context menu item</extracomment>
+        <translation type="unfinished">Standard token</translation>
+    </message>
+    <message id="yubikey-menu-use_as_steam_token">
+        <source>Steam token</source>
+        <extracomment>Context menu item</extracomment>
+        <translation type="unfinished">Steam-token</translation>
     </message>
     <message id="yubikey-status-waiting_to_reset">
         <source>Touch the same YubiKey to reset it</source>
@@ -249,9 +254,9 @@
         <translation>%1 (standard)</translation>
     </message>
     <message id="yubikey-token-digits-text">
-        <source>Digits</source>
+        <source>Digits (leave it 6 for Steam tokens)</source>
         <extracomment>Text field label (number of password digits)</extracomment>
-        <translation>Siffror</translation>
+        <translation type="unfinished">Siffror (låt det vara 6 för Steam-tokens)</translation>
     </message>
     <message id="yubikey-token-digits-placeholder">
         <source>Number of password digits</source>

@@ -51,8 +51,10 @@ class YubiKeyCardSettings::Private :
     Q_DISABLE_COPY(Private)
 
     static QMap<QString,Private*> gMap;
+    static const QChar LIST_SEPARATOR;
     static const QString SETTINGS_FILE;
     static const QString FAVORITE_ENTRY;
+    static const QString STEAM_ENTRY;
 
     Private(const QString);
     ~Private();
@@ -66,10 +68,15 @@ public:
 
     bool isFavoriteName(const QString);
     void setFavoriteHash(const QString);
+    void setSteamHashes(const QStringList);
+    void addSteamHash(const QString);
+    void removeSteamHash(const QString);
+    void steamHashesUpdated();
     void tokenRenamed(const QString, const QString);
 
 Q_SIGNALS:
     void favoriteHashChanged();
+    void steamHashesChanged();
 
 private:
     QAtomicInt iRef;
@@ -78,11 +85,14 @@ private:
 public:
     const QString iYubiKeyId;
     QString iFavoriteHash;
+    QStringList iSteamHashes;
 };
 
 QMap<QString,YubiKeyCardSettings::Private*> YubiKeyCardSettings::Private::gMap;
+const QChar YubiKeyCardSettings::Private::LIST_SEPARATOR(':');
 const QString YubiKeyCardSettings::Private::SETTINGS_FILE("settings");
 const QString YubiKeyCardSettings::Private::FAVORITE_ENTRY("Favorite");
+const QString YubiKeyCardSettings::Private::STEAM_ENTRY("Steam");
 
 YubiKeyCardSettings::Private::Private(
     const QString aYubiKeyId) :
@@ -104,6 +114,7 @@ YubiKeyCardSettings::Private::Private(
         configDir.mkpath(".");
         iSettings = new QSettings(settingsFile, QSettings::IniFormat);
         iFavoriteHash = getFavoriteHash(iSettings);
+        iSteamHashes = iSettings->value(STEAM_ENTRY).toString().split(LIST_SEPARATOR);
     }
 }
 
@@ -203,13 +214,64 @@ YubiKeyCardSettings::Private::setFavoriteHash(
 }
 
 void
+YubiKeyCardSettings::Private::steamHashesUpdated()
+{
+    HDEBUG("Steam hashes" << iSteamHashes);
+    if (iSettings) {
+        if (iSteamHashes.isEmpty()) {
+            iSettings->remove(STEAM_ENTRY);
+        } else {
+            iSettings->setValue(STEAM_ENTRY, iSteamHashes.join(LIST_SEPARATOR));
+        }
+    }
+    Q_EMIT steamHashesChanged();
+}
+
+void
+YubiKeyCardSettings::Private::setSteamHashes(
+    const QStringList aList)
+{
+    if (iSteamHashes != aList) {
+        iSteamHashes = aList;
+        steamHashesUpdated();
+    }
+}
+
+void
+YubiKeyCardSettings::Private::addSteamHash(
+    const QString aHash)
+{
+    if (!aHash.isEmpty() && !iSteamHashes.contains(aHash)) {
+        iSteamHashes.append(aHash);
+        iSteamHashes.sort();
+        steamHashesUpdated();
+    }
+}
+
+void
+YubiKeyCardSettings::Private::removeSteamHash(
+    const QString aHash)
+{
+    if (iSteamHashes.removeOne(aHash)) {
+        steamHashesUpdated();
+    }
+}
+
+void
 YubiKeyCardSettings::Private::tokenRenamed(
     const QString aFrom,
     const QString aTo)
 {
-    if (aFrom != aTo && isFavoriteName(aFrom)) {
-        HDEBUG("Favorite token renamed");
-        setFavoriteHash(aTo.isEmpty() ? QString() : YubiKeyUtil::nameHash(aTo));
+    if (aFrom != aTo) {
+        if (isFavoriteName(aFrom)) {
+            HDEBUG("Favorite token renamed");
+            setFavoriteHash(aTo.isEmpty() ? QString() : YubiKeyUtil::nameHash(aTo));
+        }
+        if (iSteamHashes.removeOne(YubiKeyUtil::steamNameHash(aFrom))) {
+            iSteamHashes.append(YubiKeyUtil::steamNameHash(aTo));
+            iSteamHashes.sort();
+            steamHashesUpdated();
+        }
     }
 }
 
@@ -225,6 +287,7 @@ YubiKeyCardSettings::YubiKeyCardSettings(
     iPrivate(Private::get(aYubiKeyId))
 {
     connect(iPrivate, SIGNAL(favoriteHashChanged()), SIGNAL(favoriteHashChanged()));
+    connect(iPrivate, SIGNAL(steamHashesChanged()), SIGNAL(steamHashesChanged()));
 }
 
 YubiKeyCardSettings::~YubiKeyCardSettings()
@@ -265,6 +328,40 @@ void
 YubiKeyCardSettings::clearFavorite()
 {
     iPrivate->setFavoriteHash(QString());
+}
+
+QStringList
+YubiKeyCardSettings::steamHashes() const
+{
+    return iPrivate->iSteamHashes;
+}
+
+bool
+YubiKeyCardSettings::isSteamHash(
+    const QString aHash) const
+{
+    return iPrivate->iSteamHashes.contains(aHash);
+}
+
+void
+YubiKeyCardSettings::setSteamHashes(
+    const QStringList aHashes)
+{
+    iPrivate->setSteamHashes(aHashes);
+}
+
+void
+YubiKeyCardSettings::addSteamHash(
+    const QString aHash)
+{
+    iPrivate->addSteamHash(aHash);
+}
+
+void
+YubiKeyCardSettings::removeSteamHash(
+    const QString aHash)
+{
+    iPrivate->removeSteamHash(aHash);
 }
 
 void

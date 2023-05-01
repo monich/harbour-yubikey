@@ -36,6 +36,7 @@
 #define _YUBIKEY_CARD_SETTINGS_H
 
 #include <QObject>
+#include <QStringList>
 
 class YubiKeyCardSettings :
     public QObject
@@ -52,10 +53,18 @@ public:
     bool isFavoriteName(const QString) const;
     void setFavoriteName(const QString);
     void clearFavorite();
+
+    QStringList steamHashes() const;
+    bool isSteamHash(const QString) const;
+    void setSteamHashes(const QStringList);
+    void addSteamHash(const QString);
+    void removeSteamHash(const QString);
+
     void tokenRenamed(const QString, const QString);
 
 Q_SIGNALS:
     void favoriteHashChanged();
+    void steamHashesChanged();
 
 private:
     class Private;

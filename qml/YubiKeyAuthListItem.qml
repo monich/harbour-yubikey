@@ -10,6 +10,7 @@ ListItem {
     property int type
     property alias name: nameLabel.text
     property string password
+    property bool steam
     property bool favorite
     property bool expired
     property bool refreshable
@@ -69,7 +70,7 @@ ListItem {
                 bold: favorite
             }
             truncationMode: TruncationMode.Fade
-            text: type === YubiKeyCard.TypeTOTP ? "TOTP" : "HOTP"
+            text: steam ? "Steam" : type === YubiKeyCard.TypeTOTP ? "TOTP" : "HOTP"
         }
     }
 

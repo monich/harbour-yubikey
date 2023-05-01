@@ -70,9 +70,12 @@ public:
     static QDir configDir();
     static QDir configDir(const QByteArray);
 
-    static QString nameHashUtf8(const QByteArray&);
+    static QString hashUtf8(const QByteArray&);
+    static QString steamHashUtf8(const QByteArray&);
+    static QString steamNameHash(const QString& aName)
+        { return steamHashUtf8(aName.toUtf8()); }
     static QString nameHash(const QString& aName)
-        { return nameHashUtf8(aName.toUtf8()); }
+        { return hashUtf8(aName.toUtf8()); }
 
     static uint versionToNumber(const uchar*, gsize);
     static inline uint versionToNumber(const QByteArray& aData)

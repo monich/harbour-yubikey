@@ -409,6 +409,7 @@ Page {
                         readonly property string itemName: model.name
                         readonly property string itemPassword: model.password
                         readonly property bool itemFavorite: model.favorite
+                        readonly property bool itemCanBeSteamToken: model.type === YubiKeyCard.TypeTOTP
                         readonly property bool itemMarkedForRefresh: model.markedForRefresh
                         readonly property bool itemMarkedForDeletion: model.markedForDeletion
                         readonly property bool itemCanCopyPassword: !itemMarkedForRefresh && !itemMarkedForDeletion && itemPassword !== ""
@@ -419,6 +420,7 @@ Page {
                         name: itemName
                         type: model.type
                         password: itemPassword
+                        steam: model.steam
                         favorite: itemFavorite
                         expired: model.expired
                         refreshable: model.refreshable
@@ -438,16 +440,6 @@ Page {
                                     if (bottom > flickable.height) {
                                         flickable.contentY += bottom - flickable.height
                                     }
-                                }
-                                MenuItem {
-                                    id: copyMenuItem
-
-                                    //: Context menu item (copy password to clipboard)
-                                    //% "Copy password"
-                                    text: qsTrId("yubikey-menu-copy_password")
-                                    onEnabledChanged: contextMenu.updateVisibility()
-                                    enabled: delegate.itemCanCopyPassword
-                                    onClicked: delegate.copyPassword()
                                 }
                                 MenuItem {
                                     id: renameMenuItem
@@ -497,17 +489,31 @@ Page {
                                     enabled: !delegate.itemMarkedForDeletion
                                     onClicked: delegate.toggleFavorite()
                                 }
+                                MenuItem {
+                                    id: steamMenuItem
+
+                                    text: model.steam ?
+                                        //: Context menu item
+                                        //% "Standard token"
+                                        qsTrId("yubikey-menu-use_as_standard_token") :
+                                        //: Context menu item
+                                        //% "Steam token"
+                                        qsTrId("yubikey-menu-use_as_steam_token")
+                                    onEnabledChanged: contextMenu.updateVisibility()
+                                    enabled: delegate.itemCanBeSteamToken && !delegate.itemMarkedForDeletion
+                                    onClicked: model.steam = !model.steam
+                                }
 
                                 Component.onCompleted: updateVisibility()
                                 onMenuExpandedChanged: updateVisibility()
 
                                 function updateVisibility() {
                                     if (!menuExpanded) {
-                                        copyMenuItem.visible = copyMenuItem.enabled
                                         renameMenuItem.visible = renameMenuItem.enabled
                                         deleteMenuItem.visible = deleteMenuItem.enabled
                                         cancelMenuItem.visible = cancelMenuItem.enabled
                                         favoriteMenuItem.visible = favoriteMenuItem.enabled
+                                        steamMenuItem.visible = steamMenuItem.enabled
                                     }
                                 }
                             }

@@ -48,10 +48,10 @@
         <extracomment>Pulley menu item</extracomment>
         <translation>Убрать пароль</translation>
     </message>
-    <message id="yubikey-menu-copy_password">
-        <source>Copy password</source>
-        <extracomment>Context menu item (copy password to clipboard)</extracomment>
-        <translation>Скопировать пароль</translation>
+    <message id="yubikey-menu-edit">
+        <source>Edit</source>
+        <extracomment>Generic menu item</extracomment>
+        <translation>Изменить</translation>
     </message>
     <message id="yubikey-menu-rename">
         <source>Rename</source>
@@ -83,10 +83,15 @@
         <extracomment>Context menu item</extracomment>
         <translation>Убрать с обложки</translation>
     </message>
-    <message id="yubikey-menu-edit">
-        <source>Edit</source>
-        <extracomment>Generic menu item</extracomment>
-        <translation>Изменить</translation>
+    <message id="yubikey-menu-use_as_standard_token">
+        <source>Standard token</source>
+        <extracomment>Context menu item</extracomment>
+        <translation>Стандартный пароль</translation>
+    </message>
+    <message id="yubikey-menu-use_as_steam_token">
+        <source>Steam token</source>
+        <extracomment>Context menu item</extracomment>
+        <translation>Пароль Steam</translation>
     </message>
     <message id="yubikey-status-waiting_to_reset">
         <source>Touch the same YubiKey to reset it</source>
@@ -249,9 +254,9 @@
         <translation>%1 (по умолчанию)</translation>
     </message>
     <message id="yubikey-token-digits-text">
-        <source>Digits</source>
+        <source>Digits (leave it 6 for Steam tokens)</source>
         <extracomment>Text field label (number of password digits)</extracomment>
-        <translation>Длина пароля</translation>
+        <translation>Длина пароля (оставьте 6 для паролей Steam)</translation>
     </message>
     <message id="yubikey-token-digits-placeholder">
         <source>Number of password digits</source>

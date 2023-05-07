@@ -517,9 +517,6 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
             setFavoritePassword(favoritePassword);
             setFavoritePasswordExpired(favoriteExpired);
             setFavoriteMarkedForRefresh(favoriteMfR);
-            if (realFavoriteName.isEmpty()) {
-                iCardSettings->clearFavorite();
-            }
         }
     }
 }

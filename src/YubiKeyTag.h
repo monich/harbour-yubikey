@@ -94,8 +94,7 @@ public:
         virtual void operationFailed();
         virtual void finished(bool aSuccess = true);
 
-        bool transmit(const NfcIsoDepApdu*);
-        bool transmit(const NfcIsoDepApdu*, TransmitDone);
+        bool transmit(const char*, const NfcIsoDepApdu*, TransmitDone);
 
     public:
         class Private;
@@ -125,7 +124,7 @@ public:
     const QString yubiKeyVersionString() const;
 
     bool deactivate();
-    int transmit(const NfcIsoDepApdu*, QObject*, const char*,
+    int transmit(const char*, const NfcIsoDepApdu*, QObject*, const char*,
         Cancellable* aCancel = Q_NULLPTR, bool aToFront = false);
 
 #define YUBIKEY_TRANSMIT_RESP_SLOT(name) \

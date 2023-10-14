@@ -10,23 +10,27 @@
  *
  *  1. Redistributions of source code must retain the above copyright
  *     notice, this list of conditions and the following disclaimer.
+ *
  *  2. Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer
  *     in the documentation and/or other materials provided with the
  *     distribution.
+ *
  *  3. Neither the names of the copyright holders nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING
- * IN ANY WAY OUT OF THE USE OR INABILITY TO USE THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * The views and conclusions contained in the software and documentation
  * are those of the authors and should not be interpreted as representing
@@ -69,12 +73,8 @@
 #  define REPORT_ERROR(name,sw,err) \
     ((void)((err) ? HDEBUG(name " error" << (err)->message) : \
     HDEBUG(name " error" << hex << sw)))
-#  define DUMP_CMD(name,cmd,id) ((id) ? (HDEBUG(name << \
-    qPrintable(YubiKeyUtil::toHex(&(cmd).data)) << id)) : \
-    (HDEBUG(name << "- oops!")))
 #else
 #  define REPORT_ERROR(name,sw,err) ((void)0)
-#  define DUMP_CMD(name,cmd,id) ((void)0)
 #endif // HARBOUR_DEBUG
 
 // ==========================================================================
@@ -155,9 +155,6 @@ public:
     private:
         static void listResp(Operation*, const GUtilData*, guint, const GError*);
         static void calculateAllResp(Operation*, const GUtilData*, guint, const GError*);
-
-    private:
-        QByteArray iRespBuf;
     };
 
     // Refresh (calculate individual codes)
@@ -241,7 +238,6 @@ public:
     static const NfcIsoDepApdu CMD_PUT_TEMPLATE;
     static const NfcIsoDepApdu CMD_DELETE_TEMPLATE;
     static const NfcIsoDepApdu CMD_RENAME_TEMPLATE;
-    static const NfcIsoDepApdu CMD_SEND_REMAINING;
 
     static const uchar CMD_SET_CODE_DATA[];
 
@@ -363,9 +359,6 @@ const NfcIsoDepApdu YubiKey::Private::CMD_DELETE_TEMPLATE = {
 };
 const NfcIsoDepApdu YubiKey::Private::CMD_RENAME_TEMPLATE = {
     0x00, 0x05, 0x00, 0x00, { NULL, 0 }, 0
-};
-const NfcIsoDepApdu YubiKey::Private::CMD_SEND_REMAINING = {
-    0x00, 0xa5, 0x00, 0x00, { NULL, 0 }, 0
 };
 
 YubiKey::Private::Private(
@@ -1004,12 +997,9 @@ YubiKey::Private::submitCalculateAll()
     if (canTransmit()) {
         CalculateAllApdu apdu;
 
-        if (iTag->transmit(buildCalculateAllApdu(&apdu), this,
-            G_STRINGIFY(CALCULATE_ALL_RESP_METHOD), iCancel)) {
-            HDEBUG("CALCULATE_ALL");
-        } else {
-            HDEBUG("CALCULATE_ALL - oops!");
-        }
+        HDEBUG("CALCULATE ALL");
+        iTag->transmit("CALCULATE ALL", buildCalculateAllApdu(&apdu),
+            this, G_STRINGIFY(CALCULATE_ALL_RESP_METHOD), iCancel);
     }
 }
 
@@ -1029,16 +1019,16 @@ YubiKey::Private::CALCULATE_ALL_RESP_METHOD(
     const GError* aError)
 {
     if (!aError && aSw == RC_OK) {
-        HDEBUG("CALCULATE_ALL ok" << aResp->size <<
+        HDEBUG("CALCULATE ALL ok" << aResp->size <<
             qPrintable(YubiKeyUtil::toHex(aResp)));
         if (haveAccess()) {
             calculateAllOk(YubiKeyUtil::toByteArray(aResp));
             emitQueuedSignals();
         } else {
-            HDEBUG("CALCULATE_ALL ignored");
+            HDEBUG("CALCULATE ALL ignored");
         }
     } else {
-        REPORT_ERROR("CALCULATE_ALL", aSw, aError);
+        REPORT_ERROR("CALCULATE ALL", aSw, aError);
     }
 }
 
@@ -1046,15 +1036,9 @@ int
 YubiKey::Private::reset()
 {
     if (canTransmit()) {
-        const int id = iTag->transmit(&CMD_RESET, this,
+        HDEBUG("RESET");
+        return iTag->transmit("RESET", &CMD_RESET, this,
             G_STRINGIFY(RESET_RESP_METHOD), iCancel);
-
-        if (id) {
-            HDEBUG("RESET");
-            return id;
-        } else {
-            HDEBUG("RESET - oops!");
-        }
     }
     return 0;
 }
@@ -1166,13 +1150,13 @@ YubiKey::Private::setPassword(
 
         cmd.data.bytes = (const guint8*)data.constData();
         cmd.data.size = data.size();
-        id = iTag->transmit(&cmd, this,
+        HDEBUG("SET_CODE");
+        id = iTag->transmit("SET CODE", &cmd, this,
             G_STRINGIFY(SET_CODE_RESP_METHOD), iCancel);
-        DUMP_CMD("SET_CODE", cmd, id);
     } else {
-        id = iTag->transmit(&CMD_SET_CODE, this,
+        HDEBUG("SET_CODE");
+        id = iTag->transmit("SET CODE", &CMD_SET_CODE, this,
             G_STRINGIFY(REMOVE_CODE_RESP_METHOD), iCancel);
-        DUMP_CMD("SET_CODE", CMD_SET_CODE, id);
     }
     return id;
 }
@@ -1286,12 +1270,8 @@ YubiKey::Private::AuthorizeOperation::startOperation()
 
             validateCmd.data.bytes = (guint8*)validateData.constData();
             validateCmd.data.size = validateData.size();
-            started = transmit(&validateCmd, validateResp);
-#if HARBOUR_DEBUG
-            if (started) {
-                HDEBUG("VALIDATE" << qPrintable(YubiKeyUtil::toHex(&validateCmd.data)));
-            }
-#endif // HARBOUR_DEBUG
+            HDEBUG("VALIDATE");
+            started = transmit("VALIDATE", &validateCmd, validateResp);
         }
     }
 
@@ -1400,7 +1380,7 @@ bool
 YubiKey::Private::ListOperation::startOperation()
 {
     HDEBUG("LIST");
-    return transmit(&CMD_LIST, listResp);
+    return transmit("LIST", &CMD_LIST, listResp);
 }
 
 void
@@ -1414,35 +1394,22 @@ YubiKey::Private::ListOperation::listResp(
     YubiKey* key = self->iYubiKey;
     YubiKey::Private* priv = key->iPrivate;
 
-    if (RC_MORE_DATA(aSw)) {
-        HDEBUG("LIST (partial)" << aResp->size << "bytes");
-        self->iRespBuf.append((const char*)aResp->bytes, aResp->size);
-        HDEBUG("CMD_SEND_REMAINING" << self->iRespBuf.size() << "+" <<
-            (NFC_ISODEP_SW2(aSw) ? NFC_ISODEP_SW2(aSw) : 0x100));
-        if (self->transmit(&CMD_SEND_REMAINING, listResp)) {
-            // More LIST data is coming our way
-            priv->emitQueuedSignals();
-            return;
-        }
-    } else if (!aError && aResp && aSw == RC_OK) {
-        HDEBUG("LIST" << aResp->size << "bytes");
-        self->iRespBuf.append((const char*)aResp->bytes, aResp->size);
-        HDEBUG("LIST ok" << qPrintable(YubiKeyUtil::toHex(self->iRespBuf)));
-        priv->updateOtpList(self->iRespBuf);
+    if (!aError && aResp && aSw == RC_OK) {
+        priv->updateOtpList(YubiKeyUtil::toByteArray(aResp));
         if (!priv->iOtpListFetched) {
             priv->iOtpListFetched = true;
             priv->queueSignal(SignalOtpListFetchedChanged);
         }
 
         // Don't request auth data if the list is empty
-        if (self->iRespBuf.isEmpty()) {
-            priv->updateOtpData(self->iRespBuf);
+        if (!aResp->size) {
+            priv->updateOtpData(QByteArray());
         } else {
             CalculateAllApdu apdu;
 
-            HDEBUG("CALCULATE_ALL");
-            self->iRespBuf.truncate(0);
-            if (self->transmit(priv->buildCalculateAllApdu(&apdu), calculateAllResp)) {
+            HDEBUG("CALCULATE ALL");
+            if (self->transmit("CALCULATE ALL", priv->buildCalculateAllApdu(&apdu),
+                calculateAllResp)) {
                 // Not finished yet
                 priv->emitQueuedSignals();
                 return;
@@ -1466,24 +1433,11 @@ YubiKey::Private::ListOperation::calculateAllResp(
     YubiKey* key = self->iYubiKey;
     YubiKey::Private* priv = key->iPrivate;
 
-    if (RC_MORE_DATA(aSw)) {
-        HDEBUG("CALCULATE_ALL (partial)" << aResp->size << "bytes");
-        self->iRespBuf.append((const char*)aResp->bytes, aResp->size);
-        HDEBUG("CMD_SEND_REMAINING" << self->iRespBuf.size() << "+" <<
-            (NFC_ISODEP_SW2(aSw) ? NFC_ISODEP_SW2(aSw) : 0x100));
-        if (self->transmit(&CMD_SEND_REMAINING, calculateAllResp)) {
-            // More CALCULATE_ALL data is coming our way
-            priv->emitQueuedSignals();
-            return;
-        }
-    } else if (!aError && aSw == RC_OK) {
-        HDEBUG("CALCULATE_ALL" << aResp->size << "bytes");
-        self->iRespBuf.append((const char*)aResp->bytes, aResp->size);
-        HDEBUG("CALCULATE_ALL ok" << qPrintable(YubiKeyUtil::toHex(self->iRespBuf)));
-        priv->calculateAllOk(self->iRespBuf);
+    if (!aError && aSw == RC_OK) {
+        priv->calculateAllOk(YubiKeyUtil::toByteArray(aResp));
         priv->emitQueuedSignals();
     } else {
-        REPORT_ERROR("CALCULATE_ALL", aSw, aError);
+        REPORT_ERROR("CALCULATE ALL", aSw, aError);
     }
     self->finished(!aError);
 }
@@ -1537,7 +1491,7 @@ YubiKey::Private::RefreshOperation::calculateNext()
         calculateCmd.data.bytes = (guint8*)calculateData.constData();
         calculateCmd.data.size = calculateData.size();
         HDEBUG("CALCULATE" << iNextName << iNames.at(iNextName));
-        if (transmit(&calculateCmd, calculateResp)) {
+        if (transmit("CALCULATE", &calculateCmd, calculateResp)) {
             iNextName++;
             return true;
         }
@@ -1621,7 +1575,7 @@ YubiKey::Private::DeleteOperation::deleteNext()
         deleteCmd.data.bytes = (guint8*)deleteData.constData();
         deleteCmd.data.size = deleteData.size();
         HDEBUG("DELETE" << iNextName << iNames.at(iNextName));
-        if (transmit(&deleteCmd, deleteResp)) {
+        if (transmit("DELETE", &deleteCmd, deleteResp)) {
             iNextName++;
             return true;
         }
@@ -1747,7 +1701,7 @@ YubiKey::Private::PutOperation::putNext()
         putCmd.data.bytes = (const guint8*)data.constData();
         putCmd.data.size = data.size();
         HDEBUG("PUT" << iNextToken << token);
-        if (transmit(&putCmd, putResp)) {
+        if (transmit("PUT", &putCmd, putResp)) {
             iNextToken++;
             return true;
         }
@@ -1826,7 +1780,7 @@ YubiKey::Private::RenameOperation::startOperation()
     renameCmd.data.bytes = (const guint8*) data.constData();
     renameCmd.data.size = data.size();
     HDEBUG("RENAME" << iFrom << "=>" << iTo);
-    return transmit(&renameCmd, renameResp);
+    return transmit("RENAME", &renameCmd, renameResp);
 }
 
 void

@@ -37,6 +37,7 @@
  * any official policies, either expressed or implied.
  */
 
+#include "nfcdc_error.h"
 #include "nfcdc_isodep.h"
 #include "nfcdc_tag.h"
 
@@ -110,6 +111,8 @@ class YubiKeyTag::Operation::Private:
     public YubiKeyConstants
 {
 public:
+    static const NfcIsoDepApdu CMD_SEND_REMAINING;
+
     class Queue {
     public:
         Queue() : iFirst(Q_NULLPTR), iLast(Q_NULLPTR) {}
@@ -130,13 +133,20 @@ public:
 
     class TransmitData {
     public:
-        TransmitData(Operation*, TransmitDone);
+        TransmitData(const char*, Operation*, TransmitDone);
         ~TransmitData();
-        static void staticResp(NfcIsoDepClient*,const GUtilData*, guint, const GError*, void*);
-        static void staticFree(gpointer);
+        TransmitData* ref();
+        void unref();
+        bool transmit(const NfcIsoDepApdu*);
+        static void staticResp(NfcIsoDepClient*, const GUtilData*, guint, const GError*, void*);
+        static void staticUnref(gpointer);
     public:
+        QAtomicInt iRef;
+        const char* iName;
         Operation* iOperation;
         TransmitDone iCallback;
+        QByteArray iRespBuf;
+        unsigned int iCount;
     };
 
     // None => Queued => Active => Finished
@@ -186,6 +196,10 @@ public:
     int iId;
     bool iSuccess;
     const bool iRequireSelect;
+};
+
+const NfcIsoDepApdu YubiKeyTag::Operation::Private::CMD_SEND_REMAINING = {
+    0x00, 0xa5, 0x00, 0x00, { NULL, 0 }, 0
 };
 
 #if HARBOUR_DEBUG
@@ -1171,16 +1185,50 @@ YubiKeyTag::Operation::Private::selectOk(
 // ==========================================================================
 
 YubiKeyTag::Operation::Private::TransmitData::TransmitData(
+    const char* aName, // Static string (optional)
     Operation* aOperation,
     TransmitDone aCallback) :
+    iRef(1),
+    iName(aName),
     iOperation(aOperation->ref()),
-    iCallback(aCallback)
+    iCallback(aCallback),
+    iCount(0)
 {
 }
 
 YubiKeyTag::Operation::Private::TransmitData::~TransmitData()
 {
     iOperation->unref();
+}
+
+YubiKeyTag::Operation::Private::TransmitData*
+YubiKeyTag::Operation::Private::TransmitData::ref()
+{
+    iRef.ref();
+    return this;
+}
+
+void
+YubiKeyTag::Operation::Private::TransmitData::unref()
+{
+    if (!iRef.deref()) {
+        delete this;
+    }
+}
+
+bool
+YubiKeyTag::Operation::Private::TransmitData::transmit(
+    const NfcIsoDepApdu* aApdu)
+{
+    Private* priv = iOperation->iPrivate;
+
+    if (nfc_isodep_client_transmit(priv->iIsoDep, aApdu, priv->iCancel,
+        staticResp, ref(), staticUnref)) {
+        DUMP_APDU(aApdu);
+        iCount++;
+        return true;
+    }
+    return false;
 }
 
 void
@@ -1191,16 +1239,67 @@ YubiKeyTag::Operation::Private::TransmitData::staticResp(
     const GError* aError,
     void* aData)
 {
-    TransmitData* data = (TransmitData*) aData;
+    TransmitData* self = (TransmitData*) aData;
+    Operation* op = self->iOperation;
+    QByteArray* buf = &self->iRespBuf;
 
-    data->iCallback(data->iOperation, aResp, aSw, aError);
+    if (RC_MORE_DATA(aSw)) {
+        buf->append((const char*)aResp->bytes, aResp->size);
+
+#if HARBOUR_DEBUG
+        if (self->iName) {
+            HDEBUG(self->iName << "(partial)" << aResp->size << "bytes");
+            HDEBUG("SEND REMAINING" << buf->size() << "+" <<
+                (NFC_ISODEP_SW2(aSw) ? NFC_ISODEP_SW2(aSw) : 0x100));
+        }
+#endif
+
+        if (!self->transmit(&CMD_SEND_REMAINING)) {
+            if (self->iCallback) {
+                GError* error = g_error_new_literal(NFCDC_ERROR,
+                    NFCDC_ERROR_FAILED, "Transmission failed");
+
+                self->iCallback(op, NULL, 0, error);
+                g_error_free(error);
+            }
+        }
+    } else if (!aError && aResp && aSw == RC_OK) {
+        GUtilData resp;
+
+        if (buf->isEmpty()) {
+            resp = *aResp;
+        } else {
+            buf->append((const char*)aResp->bytes, aResp->size);
+            resp.bytes = (const guint8*) buf->constData();
+            resp.size = buf->size();
+        }
+
+#if HARBOUR_DEBUG
+        if (self->iName) {
+            if (self->iCount > 1) {
+                HDEBUG("SEND REMAINING" << aResp->size << "bytes (" <<
+                    resp.size << "total )");
+            } else {
+                HDEBUG(self->iName << aResp->size << "bytes");
+            }
+            HDEBUG(op->iPrivate->iName << "ok" <<
+                qPrintable(YubiKeyUtil::toHex(&resp)));
+        }
+#endif
+
+        if (self->iCallback) {
+            self->iCallback(op, &resp, aSw, Q_NULLPTR);
+        }
+    } else if (self->iCallback) {
+        self->iCallback(op, aResp, aSw, aError);
+    }
 }
 
 void
-YubiKeyTag::Operation::Private::TransmitData::staticFree(
+YubiKeyTag::Operation::Private::TransmitData::staticUnref(
     gpointer aData)
 {
-    delete (TransmitData*) aData;
+    ((TransmitData*) aData)->unref();;
 }
 
 // ==========================================================================
@@ -1287,42 +1386,27 @@ YubiKeyTag::Operation::cancel()
 
 bool
 YubiKeyTag::Operation::transmit(
-    const NfcIsoDepApdu* aApdu)
-{
-    HASSERT(iPrivate->iIsoDep);
-    if (nfc_isodep_client_transmit(iPrivate->iIsoDep, aApdu, iPrivate->iCancel,
-        NULL, this, Private::staticUnref)) {
-        DUMP_APDU(aApdu);
-        ref();
-        return true;
-    }
-    return false;
-}
-
-bool
-YubiKeyTag::Operation::transmit(
+    const char* aName, // Static string (optional)
     const NfcIsoDepApdu* aApdu,
-    TransmitDone aMethod)
+    TransmitDone aCallback)
 {
-    Private::TransmitData* data = new Private::TransmitData(this, aMethod);
+    Private::TransmitData* tx = new Private::TransmitData(aName, this, aCallback);
 
-    HASSERT(iPrivate->iIsoDep);
-    if (nfc_isodep_client_transmit(iPrivate->iIsoDep, aApdu,
-        iPrivate->iCancel, Private::TransmitData::staticResp, data,
-        Private::TransmitData::staticFree)) {
-        DUMP_APDU(aApdu);
-        return true;
-    } else {
-        delete data;
-        return false;
+    const bool ok = tx->transmit(aApdu);
+    tx->unref();
+#if HARBOUR_DEBUG
+    if (aName && !ok) {
+        HDEBUG(aName << "failed");
     }
+#endif
+    return ok;
 }
 
 void
 YubiKeyTag::Operation::lockFailed(
     const GError* aError)
 {
-    GERR("%s", GERRMSG(aError));
+    HWARN(GERRMSG(aError));
 }
 
 void
@@ -1374,11 +1458,8 @@ YubiKeyTag::Initialize::startOperation()
 class YubiKeyTag::Transmit :
     public YubiKeyTag::Operation
 {
-private:
-    static const NfcIsoDepApdu CMD_SEND_REMAINING;
-
 public:
-    Transmit(const NfcIsoDepApdu*, QObject*, const char*, GCancellable*);
+    Transmit(const char*, const NfcIsoDepApdu*, QObject*, const char*, GCancellable*);
 
     bool startOperation() Q_DECL_OVERRIDE;
     void operationCancelled() Q_DECL_OVERRIDE;
@@ -1391,23 +1472,21 @@ private:
     void complete(const GUtilData*, guint, const GError*);
 
 private:
+    const char* iName;
     void* iData;
-    QByteArray iRespBuf;
     NfcIsoDepApdu iApdu;
     QObject* iHandler;
     char* iMethod;
 };
 
-const NfcIsoDepApdu YubiKeyTag::Transmit::CMD_SEND_REMAINING = {
-    0x00, 0xa5, 0x00, 0x00, { NULL, 0 }, 0
-};
-
 YubiKeyTag::Transmit::Transmit(
+    const char* aName, // Static string
     const NfcIsoDepApdu* aApdu,
     QObject* aHandler,
     const char* aMethod,
     GCancellable* aCancel) :
     Operation("Transmit", aCancel, false),
+    iName(aName),
     iData(gutil_memdup(aApdu->data.bytes, aApdu->data.size)),
     iApdu(*aApdu),
     iHandler(aHandler),
@@ -1426,7 +1505,7 @@ YubiKeyTag::Transmit::~Transmit()
 bool
 YubiKeyTag::Transmit::startOperation()
 {
-    return transmit(&iApdu, &Transmit::staticComplete);
+    return transmit(iName, &iApdu, staticComplete);
 }
 
 void
@@ -1445,24 +1524,7 @@ YubiKeyTag::Transmit::staticComplete(
     guint aSw,
     const GError* aError)
 {
-    Transmit* self = (Transmit*)aSelf;
-    QByteArray* respBuf = &self->iRespBuf;
-
-    if (RC_MORE_DATA(aSw)) {
-        respBuf->append((const char*)aResp->bytes, aResp->size);
-        HDEBUG("CMD_SEND_REMAINING" << respBuf->size() << "+" <<
-            (NFC_ISODEP_SW2(aSw) ? NFC_ISODEP_SW2(aSw) : 0x100));
-        self->transmit(&CMD_SEND_REMAINING, &Transmit::staticComplete);
-    } else if (respBuf->isEmpty()) {
-        self->complete(aResp, aSw, aError);
-    } else {
-        GUtilData resp;
-
-        respBuf->append((const char*)aResp->bytes, aResp->size);
-        resp.bytes = (const guint8*)respBuf->constData();
-        resp.size = respBuf->size();
-        self->complete(&resp, aSw, aError);
-    }
+    ((Transmit*)aSelf)->complete(aResp, aSw, aError);
 }
 
 void
@@ -1609,6 +1671,7 @@ YubiKeyTag::operationIds() const
 
 int
 YubiKeyTag::transmit(
+    const char* aName,
     const NfcIsoDepApdu* aApdu,
     QObject* aHandler,
     const char* aMethod,
@@ -1619,7 +1682,7 @@ YubiKeyTag::transmit(
 
     if (isoDep->valid && isoDep->present) {
         GCancellable* cancel = aCancel ? aCancel : iPrivate->iCancel;
-        Transmit* tx = new Transmit(aApdu, aHandler, aMethod, cancel);
+        Transmit* tx = new Transmit(aName, aApdu, aHandler, aMethod, cancel);
         int id = tx->submit(this, aToFront);
 
         tx->unref();

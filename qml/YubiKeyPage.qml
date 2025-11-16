@@ -368,7 +368,7 @@ Page {
 
             contentHeight: authDataColumn.y + authDataColumn.height + Theme.paddingLarge
             interactive: !yubiKeyAccessDenied
-            clip: isPortrait
+            clip: true
             anchors {
                 bottom: parent.bottom
                 right: parent.right

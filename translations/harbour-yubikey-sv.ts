@@ -23,6 +23,16 @@
         <extracomment>Pop-up notification</extracomment>
         <translation>Lösenord kopierat till urklipp</translation>
     </message>
+    <message id="yubikey-notification-put_error">
+        <source>Failed to add %1 (%2)</source>
+        <extracomment>Pop-up notification (%1 if the token label, %2 is the error message/code)</extracomment>
+        <translation type="unfinished">Misslyckades med att lägga till %1 (%2)</translation>
+    </message>
+    <message id="yubikey-error-no_space">
+        <source>No space</source>
+        <extracomment>Error message (No space)</extracomment>
+        <translation type="unfinished">Inget utrymme</translation>
+    </message>
     <message id="yubikey-menu-add_token">
         <source>Add token</source>
         <extracomment>Pulley menu item</extracomment>

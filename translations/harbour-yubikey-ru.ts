@@ -23,6 +23,16 @@
         <extracomment>Pop-up notification</extracomment>
         <translation>Пароль скопирован в буфер обмена</translation>
     </message>
+    <message id="yubikey-notification-put_error">
+        <source>Failed to add %1 (%2)</source>
+        <extracomment>Pop-up notification (%1 if the token label, %2 is the error message/code)</extracomment>
+        <translation>Не удалось сохранить %1 (%2)</translation>
+    </message>
+    <message id="yubikey-error-no_space">
+        <source>No space</source>
+        <extracomment>Error message (No space)</extracomment>
+        <translation>место закончилось</translation>
+    </message>
     <message id="yubikey-menu-add_token">
         <source>Add token</source>
         <extracomment>Pulley menu item</extracomment>

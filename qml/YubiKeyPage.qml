@@ -109,6 +109,22 @@ Page {
         onYubiKeyReset: thisPage.yubiKeyReset()
         onTotpCodesExpired: otpListModel.totpCodesExpired()
         onTokenRenamed: otpListModel.tokenRenamed(from, to)
+        onPresentChanged: {
+            if (present) {
+                errorPopup.hide(false)
+            }
+        }
+        onPutFailed: {
+            var err = (errorCode === YubiKeyUtil.ErrorNoSpace) ?
+                //: Error message (No space)
+                //% "No space"
+                qsTrId("yubikey-error-no_space") :
+                errorCode.toString(16)
+            //: Pop-up notification (%1 if the token label, %2 is the error message/code)
+            //% "Failed to add %1 (%2)"
+            errorPopup.text = qsTrId("yubikey-notification-put_error").arg(token.label).arg(err)
+            errorPopup.show(false)
+        }
     }
 
     Buzz {
@@ -441,6 +457,7 @@ Page {
                                         flickable.contentY += bottom - flickable.height
                                     }
                                 }
+
                                 MenuItem {
                                     id: renameMenuItem
 
@@ -616,8 +633,6 @@ Page {
         }
 
         Loader {
-            id: passwordInputLoader
-
             active: yubiKeyAccessDenied
             anchors {
                 left: contentFlickable.left
@@ -665,6 +680,10 @@ Page {
                 }
             }
         }
+    }
+
+    YubiKeyErrorPopup {
+        id: errorPopup
     }
 
     states: [

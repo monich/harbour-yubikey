@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -50,10 +50,10 @@
 
 #include "HarbourDebug.h"
 
-#include <QAtomicInt>
-#include <QDateTime>
-#include <QMap>
-#include <QTimer>
+#include <QtCore/QAtomicInt>
+#include <QtCore/QDateTime>
+#include <QtCore/QMap>
+#include <QtCore/QTimer>
 
 // s(SignalName,signalName)
 #define YUBIKEY_SIGNALS(s) \
@@ -201,6 +201,7 @@ public:
         bool startOperation() Q_DECL_OVERRIDE;
 
     private:
+        YubiKeyToken lastToken() const;
         bool putNext();
         static void putResp(Operation*, const GUtilData*, guint, const GError*);
 
@@ -1634,6 +1635,12 @@ YubiKey::Private::PutOperation::startOperation()
     return putNext();
 }
 
+YubiKeyToken
+YubiKey::Private::PutOperation::lastToken() const
+{
+    return iNextToken > 0 ? iTokens.at(iNextToken - 1) : YubiKeyToken();
+}
+
 bool
 YubiKey::Private::PutOperation::putNext()
 {
@@ -1721,13 +1728,12 @@ YubiKey::Private::PutOperation::putResp(
     YubiKey::Private* priv = key->iPrivate;
 
     if (!aError) {
-#if HARBOUR_DEBUG
         if (aSw == RC_OK) {
             HDEBUG("PUT ok");
         } else{
             HDEBUG("PUT error" << hex << aSw);
+            Q_EMIT key->putFailed(self->lastToken(), aSw);
         }
-#endif // HARBOUR_DEBUG
         // Try the next one anyway
         if (self->putNext()) {
             // Not finished yet

@@ -49,6 +49,7 @@
 #include "YubiKeyUtil.h"
 
 #include "HarbourDebug.h"
+#include "HarbourUtil.h"
 
 #include <QtCore/QAtomicInt>
 #include <QtCore/QDateTime>
@@ -377,7 +378,7 @@ YubiKey::Private::Private(
     iPresent(false),
     iAuthAccess(YubiKeyAuthAccessUnknown),
     iYubiKeyId(aYubiKeyId),
-    iYubiKeyIdString(YubiKeyUtil::toHex(aYubiKeyId)),
+    iYubiKeyIdString(HarbourUtil::toHex(aYubiKeyId)),
     iYubiKeyVersionNumber(0),
     iYubiKeySerial(0),
     iOtpListFetched(false),
@@ -559,7 +560,7 @@ YubiKey::Private::onYubiKeyIdChanged()
         iTag->tagState() == YubiKeyTag::TagYubiKeyReady &&
         iTag->yubiKeyId() != iYubiKeyId) {
         HDEBUG(qPrintable(iYubiKeyIdString) << "=>" <<
-            qPrintable(YubiKeyUtil::toHex(iTag->yubiKeyId())) << "(reset?)");
+            qPrintable(HarbourUtil::toHex(iTag->yubiKeyId())) << "(reset?)");
         dropTag();
         updateTagState();
         emitQueuedSignals();
@@ -607,7 +608,7 @@ YubiKey::Private::onAccessKeyChanged(
     YubiKeyAlgorithm aAlgorithm)
 {
     if (iYubiKeyId == aYubiKeyId) {
-        HDEBUG(qPrintable(YubiKeyUtil::toHex(aYubiKeyId)) << aAlgorithm);
+        HDEBUG(qPrintable(HarbourUtil::toHex(aYubiKeyId)) << aAlgorithm);
         updateAuthAccess(YubiKeyAuthAccessUnknown);
         verifyAuthorization();
         emitQueuedSignals();
@@ -748,7 +749,7 @@ YubiKey::Private::updateOtpList(
 {
     if (iOtpList != aOtpList) {
         iOtpList = aOtpList;
-        iOtpListString = YubiKeyUtil::toHex(aOtpList);
+        iOtpListString = HarbourUtil::toHex(aOtpList);
         HDEBUG(qPrintable(iOtpListString));
         queueSignal(SignalOtpListChanged);
     }
@@ -760,7 +761,7 @@ YubiKey::Private::updateOtpData(
 {
     if (iOtpData != aOtpData) {
         iOtpData = aOtpData;
-        iOtpDataString = YubiKeyUtil::toHex(aOtpData);
+        iOtpDataString = HarbourUtil::toHex(aOtpData);
         HDEBUG(qPrintable(iOtpDataString));
 
         uchar tag;
@@ -1119,8 +1120,8 @@ YubiKey::Private::setPassword(
         const QByteArray challenge(YubiKeyUtil::toByteArray(foil_random_bytes(CHALLENGE_LEN)));
         const QByteArray response(YubiKeyAuth::calculateResponse(key, challenge, alg));
 
-        HDEBUG("Host challenge:" << qPrintable(YubiKeyUtil::toHex(challenge)));
-        HDEBUG("Response:" << qPrintable(YubiKeyUtil::toHex(response)));
+        HDEBUG("Host challenge:" << qPrintable(HarbourUtil::toHex(challenge)));
+        HDEBUG("Response:" << qPrintable(HarbourUtil::toHex(response)));
 
         // Set Code Data
         //
@@ -1241,15 +1242,15 @@ YubiKey::Private::AuthorizeOperation::startOperation()
         if (iAccessKey.isEmpty()) {
             priv->updateAuthAccess(YubiKeyAuthAccessDenied);
             HDEBUG("No" << iAlgorithm << "access key for" <<
-                qPrintable(YubiKeyUtil::toHex(priv->iYubiKeyId)));
+                qPrintable(HarbourUtil::toHex(priv->iYubiKeyId)));
             finished();
         } else {
             const QByteArray response(YubiKeyAuth::calculateResponse(iAccessKey,
                 challenge, iAlgorithm));
 
             iHostChallenge = YubiKeyUtil::toByteArray(foil_random_bytes(CHALLENGE_LEN));
-            HDEBUG("Response:" << qPrintable(YubiKeyUtil::toHex(response)));
-            HDEBUG("Host challenge:" << qPrintable(YubiKeyUtil::toHex(iHostChallenge)));
+            HDEBUG("Response:" << qPrintable(HarbourUtil::toHex(response)));
+            HDEBUG("Host challenge:" << qPrintable(HarbourUtil::toHex(iHostChallenge)));
 
             // Validate Data
             //
@@ -1316,7 +1317,7 @@ YubiKey::Private::AuthorizeOperation::validateResp(
             while ((tag = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
                 if (tag == TLV_TAG_RESPONSE_FULL) {
                     cardResp = QByteArray((char*)data.bytes, data.size);
-                    HDEBUG("Card response:" << qPrintable(YubiKeyUtil::toHex(cardResp)));
+                    HDEBUG("Card response:" << qPrintable(HarbourUtil::toHex(cardResp)));
                     break;
                 }
             }
@@ -1325,7 +1326,7 @@ YubiKey::Private::AuthorizeOperation::validateResp(
             if (!cardResp.isEmpty()) {
                 const QByteArray hostResp(YubiKeyAuth::calculateResponse
                     (self->iAccessKey, self->iHostChallenge, self->iAlgorithm));
-                HDEBUG("Host response:" << qPrintable(YubiKeyUtil::toHex(hostResp)));
+                HDEBUG("Host response:" << qPrintable(HarbourUtil::toHex(hostResp)));
                 if (hostResp == cardResp) {
                     HDEBUG("Match!");
                     authorized = true;

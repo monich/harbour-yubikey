@@ -48,6 +48,7 @@
 
 #include "HarbourBase32.h"
 #include "HarbourDebug.h"
+#include "HarbourUtil.h"
 
 #define YUBIKEY_ACCESS(s) \
     s(Unknown) \
@@ -332,7 +333,7 @@ YubiKeyCard::Private::setYubiKeyId(
         queueSignal(SignalYubiKeyIdChanged);
         dropYubiKey();
         iYubiKey = YubiKey::get(aYubiKeyId);
-        HDEBUG(parentObject() << qPrintable(YubiKeyUtil::toHex(aYubiKeyId)) << iYubiKey);
+        HDEBUG(parentObject() << qPrintable(HarbourUtil::toHex(aYubiKeyId)) << iYubiKey);
 
         // Connect signals
         YubiKeyCard* card = parentObject();

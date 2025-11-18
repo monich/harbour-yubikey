@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -44,11 +46,12 @@
 #include "YubiKeyUtil.h"
 
 #include "HarbourDebug.h"
+#include "HarbourUtil.h"
 
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
-#include <QSettings>
+#include <QtCore/QDir>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
+#include <QtCore/QSettings>
 
 #define AlgorithmIndex(a) ((a) - YubiKeyAlgorithm_Min)
 #define AlgorithmCount (AlgorithmIndex(YubiKeyAlgorithm_Max) + 1)
@@ -108,7 +111,7 @@ const QString
 YubiKeyAuth::Private::authFilePath(
     const QByteArray aYubiKeyId)
 {
-    return iConfigDir.absoluteFilePath(YubiKeyUtil::toHex(aYubiKeyId)) +
+    return iConfigDir.absoluteFilePath(HarbourUtil::toHex(aYubiKeyId)) +
         QDir::separator() + AUTH_FILE;
 }
 
@@ -119,7 +122,7 @@ YubiKeyAuth::Private::getAuthSettings(
     QSettings* auth = iAuthMap.value(aYubiKeyId);
 
     if (!auth) {
-        const QString keyDirName(YubiKeyUtil::toHex(aYubiKeyId));
+        const QString keyDirName(HarbourUtil::toHex(aYubiKeyId));
         const QString keyDirPath(iConfigDir.absoluteFilePath(keyDirName));
 
         if (iConfigDir.mkpath(keyDirName)) {
@@ -205,8 +208,8 @@ YubiKeyAuth::Private::setAccessKey(
 
         if (aAccessKey != iAccessKeyMap[mapIndex].value(aYubiKeyId)) {
             iAccessKeyMap[mapIndex].insert(aYubiKeyId, aAccessKey);
-            HDEBUG(qPrintable(YubiKeyUtil::toHex(aYubiKeyId)) << aAlgorithm <<
-                "=>" << qPrintable(YubiKeyUtil::toHex(aAccessKey)));
+            HDEBUG(qPrintable(HarbourUtil::toHex(aYubiKeyId)) << aAlgorithm <<
+                "=>" << qPrintable(HarbourUtil::toHex(aAccessKey)));
             if (aSave) {
                 QSettings* settings = iAuthMap.value(aYubiKeyId);
 
@@ -226,7 +229,7 @@ YubiKeyAuth::Private::setAccessKey(
                 }
                 if (settings) {
                     settings->setValue(YubiKeyUtil::algorithmName(aAlgorithm),
-                        YubiKeyUtil::toHex(aAccessKey));
+                        HarbourUtil::toHex(aAccessKey));
                 }
             }
             return true;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -50,9 +50,10 @@
 #include "YubiKeyUtil.h"
 
 #include "HarbourDebug.h"
+#include "HarbourUtil.h"
 
-#include <QAtomicInt>
-#include <QMap>
+#include <QtCore/QAtomicInt>
+#include <QtCore/QMap>
 
 #define TAG_STATES(s) \
     s(None) \
@@ -600,7 +601,7 @@ YubiKeyTag::Private::updateYubiKeyId(
 {
     if (iYubiKeyId != aId) {
         iYubiKeyId = aId;
-        iYubiKeyIdString = YubiKeyUtil::toHex(aId);
+        iYubiKeyIdString = HarbourUtil::toHex(aId);
         HDEBUG(qPrintable(iYubiKeyIdString));
         queueSignal(SignalYubiKeyIdChanged);
         updateYubiKeySerial();
@@ -625,7 +626,7 @@ YubiKeyTag::Private::updateYubiKeyAuthChallenge(
 {
     if (iYubiKeyAuthChallenge != aChallenge) {
         iYubiKeyAuthChallenge = aChallenge;
-        HDEBUG(qPrintable(YubiKeyUtil::toHex(aChallenge)));
+        HDEBUG(qPrintable(HarbourUtil::toHex(aChallenge)));
         queueSignal(SignalYubiKeyAuthChallengeChanged);
     }
 }
@@ -1146,7 +1147,7 @@ YubiKeyTag::Operation::Private::selectOk(
             const QByteArray bytes((char*)data.bytes, data.size);
             switch (t) {
             case TLV_TAG_NAME:
-                HDEBUG("Id:" << qPrintable(YubiKeyUtil::toHex(bytes)));
+                HDEBUG("Id:" << qPrintable(HarbourUtil::toHex(bytes)));
                 cardId = bytes;
                 break;
             case TLV_TAG_VERSION:
@@ -1154,7 +1155,7 @@ YubiKeyTag::Operation::Private::selectOk(
                 version = bytes;
                 break;
             case TLV_TAG_CHALLENGE:
-                HDEBUG("Challenge:" << qPrintable(YubiKeyUtil::toHex(bytes)));
+                HDEBUG("Challenge:" << qPrintable(HarbourUtil::toHex(bytes)));
                 challenge = bytes;
                 break;
             default:

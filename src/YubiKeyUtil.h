@@ -45,6 +45,8 @@
 #include "YubiKeyConstants.h"
 #include "YubiKeyToken.h"
 
+#include "HarbourUtil.h"
+
 #include <QtCore/QByteArray>
 #include <QtCore/QDir>
 #include <QtCore/QString>
@@ -97,12 +99,8 @@ public:
     static QByteArray toByteArray(const GUtilData*);
     static QByteArray toByteArray(GBytes*, bool aDropBytes = true);
     static QByteArray fromHex(const QString);
-
-    static QString toHex(const uchar*, gsize);
-    static inline QString toHex(const QByteArray& aData)
-        { return toHex((uchar*)aData.constData(), aData.size()); }
     static inline QString toHex(const GUtilData* aData)
-        { return toHex(aData->bytes, aData->size); }
+        { return HarbourUtil::toHex(aData->bytes, aData->size); }
 
     static uchar readTLV(GUtilRange*, GUtilData*);
     static void appendTLV(QByteArray*, uchar, const QByteArray);

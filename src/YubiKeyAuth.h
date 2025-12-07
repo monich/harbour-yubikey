@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
- * Copyright (C) 2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -40,37 +42,34 @@
 
 #include "YubiKeyTypes.h"
 
-#include <QObject>
-#include <QString>
-#include <QByteArray>
+#include <QtCore/QByteArray>
+#include <QtCore/QObject>
 
 class YubiKeyAuth :
     public QObject
 {
     Q_OBJECT
-    Q_DISABLE_COPY(YubiKeyAuth)
 
-private:
+public:
+    YubiKeyAuth(const QByteArray);
+    YubiKeyAuth(const YubiKeyAuth&);
     YubiKeyAuth();
     ~YubiKeyAuth();
 
-public:
-    static YubiKeyAuth* get();
-    void put() { unref(); }
+    YubiKeyAuth& operator = (const YubiKeyAuth&);
 
-    YubiKeyAuth* ref();
-    void unref();
+    bool isValid() const;
+    QByteArray yubiKeyId() const;
+    QByteArray getAccessKey(YubiKeyAlgorithm) const;
+    bool setAccessKey(YubiKeyAlgorithm, const QByteArray, bool);
+    bool setPassword(YubiKeyAlgorithm, const QString, bool);
+    void clearPassword();
 
-    bool setPassword(const QByteArray, YubiKeyAlgorithm, const QString, bool);
-    bool setAccessKey(const QByteArray, YubiKeyAlgorithm, const QByteArray, bool);
-    void clearPassword(const QByteArray);
-
-    const QByteArray getAccessKey(const QByteArray, YubiKeyAlgorithm) const;
     static QByteArray calculateAccessKey(const QByteArray, YubiKeyAlgorithm, const QString);
     static QByteArray calculateResponse(const QByteArray, const QByteArray, YubiKeyAlgorithm);
 
 Q_SIGNALS:
-    void accessKeyChanged(const QByteArray, YubiKeyAlgorithm);
+    void accessKeyChanged(YubiKeyAlgorithm);
 
 private:
     class Private;

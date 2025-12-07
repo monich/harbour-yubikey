@@ -295,7 +295,7 @@ public Q_SLOTS:
     void onYubiKeyAuthAlgorithmChanged();
     void onYubiKeyAuthChallengeChanged();
     void onOperationIdsChanged();
-    void onAccessKeyChanged(const QByteArray, YubiKeyAlgorithm);
+    void onAccessKeyChanged(YubiKeyAlgorithm);
     void onTotpTimer();
 
 public:
@@ -303,7 +303,7 @@ public:
     SignalMask iQueuedSignals;
     Signal iFirstQueuedSignal;
     YubiKeyTag* iTag;
-    YubiKeyAuth* iAuth;
+    YubiKeyAuth iAuth;
     YubiKeyAlgorithm iAuthAlgorithm;
     NfcDefaultAdapter* iAdapter;
     gulong iAdapterEventId;
@@ -371,7 +371,7 @@ YubiKey::Private::Private(
     iQueuedSignals(0),
     iFirstQueuedSignal(SignalCount),
     iTag(Q_NULLPTR),
-    iAuth(YubiKeyAuth::get()),
+    iAuth(aYubiKeyId),
     iAuthAlgorithm(YubiKeyAlgorithm_Unknown),
     iAdapter(nfc_default_adapter_new()),
     iCancel(g_cancellable_new()),
@@ -390,9 +390,8 @@ YubiKey::Private::Private(
 {
     iTotpTimer->setSingleShot(true);
     connect(iTotpTimer, SIGNAL(timeout()), SLOT(onTotpTimer()));
-    connect(iAuth,
-        SIGNAL(accessKeyChanged(QByteArray,YubiKeyAlgorithm)),
-        SLOT(onAccessKeyChanged(QByteArray,YubiKeyAlgorithm)));
+    connect(&iAuth, SIGNAL(accessKeyChanged(YubiKeyAlgorithm)),
+        SLOT(onAccessKeyChanged(YubiKeyAlgorithm)));
     iAdapterEventId = nfc_default_adapter_add_property_handler(iAdapter,
         NFC_DEFAULT_ADAPTER_PROPERTY_TAGS, staticAdapterEvent, this);
 }
@@ -402,8 +401,6 @@ YubiKey::Private::~Private()
     nfc_default_adapter_remove_handler(iAdapter, iAdapterEventId);
     nfc_default_adapter_unref(iAdapter);
     dropTag();
-    iAuth->disconnect(this);
-    iAuth->put();
 }
 
 inline
@@ -604,15 +601,12 @@ YubiKey::Private::onOperationIdsChanged()
 
 void
 YubiKey::Private::onAccessKeyChanged(
-    const QByteArray aYubiKeyId,
     YubiKeyAlgorithm aAlgorithm)
 {
-    if (iYubiKeyId == aYubiKeyId) {
-        HDEBUG(qPrintable(HarbourUtil::toHex(aYubiKeyId)) << aAlgorithm);
-        updateAuthAccess(YubiKeyAuthAccessUnknown);
-        verifyAuthorization();
-        emitQueuedSignals();
-    }
+    HDEBUG(qPrintable(HarbourUtil::toHex(iYubiKeyId)) << aAlgorithm);
+    updateAuthAccess(YubiKeyAuthAccessUnknown);
+    verifyAuthorization();
+    emitQueuedSignals();
 }
 
 void
@@ -1070,19 +1064,16 @@ YubiKey::Private::submitPassword(
     bool aSave)
 {
     if (iAuthAlgorithm != YubiKeyAlgorithm_Unknown) {
-        // Temporary disconnect the signal to avoid double authorization check
-        disconnect(iAuth,
-            SIGNAL(accessKeyChanged(QByteArray,YubiKeyAlgorithm)), this,
-            SLOT(onAccessKeyChanged(QByteArray,YubiKeyAlgorithm)));
-        if (iAuth->setPassword(iYubiKeyId, iAuthAlgorithm, aPassword, aSave)) {
+        iAuth.disconnect(SIGNAL(accessKeyChanged(YubiKeyAlgorithm)), this,
+            SLOT(onAccessKeyChanged(YubiKeyAlgorithm)));
+        if (iAuth.setPassword(iAuthAlgorithm, aPassword, aSave)) {
             updateAuthAccess(YubiKeyAuthAccessUnknown);
         }
         // Force re-check even if password didn't change
         recheckAuthorization();
         // Re-connect the signal
-        connect(iAuth,
-            SIGNAL(accessKeyChanged(QByteArray,YubiKeyAlgorithm)), this,
-            SLOT(onAccessKeyChanged(QByteArray,YubiKeyAlgorithm)));
+        connect(&iAuth, SIGNAL(accessKeyChanged(YubiKeyAlgorithm)),
+            SLOT(onAccessKeyChanged(YubiKeyAlgorithm)));
         return true;
     } else {
         return false;
@@ -1190,7 +1181,7 @@ YubiKey::Private::setCodeResp(
 {
     if (!aError && aSw == RC_OK) {
         HDEBUG("SET_CODE ok" << qPrintable(YubiKeyUtil::toHex(aResp)));
-        iAuth->clearPassword(iYubiKeyId);
+        iAuth.clearPassword();
         recheckAuthorization();
         Q_EMIT (parentObject()->*(aSignal))();
     } else {
@@ -1238,7 +1229,7 @@ YubiKey::Private::AuthorizeOperation::startOperation()
         finished();
     } else {
         iAlgorithm = tag->yubiKeyAuthAlgorithm();
-        iAccessKey = priv->iAuth->getAccessKey(priv->iYubiKeyId, iAlgorithm);
+        iAccessKey = priv->iAuth.getAccessKey(iAlgorithm);
         if (iAccessKey.isEmpty()) {
             priv->updateAuthAccess(YubiKeyAuthAccessDenied);
             HDEBUG("No" << iAlgorithm << "access key for" <<

@@ -51,132 +51,165 @@
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
+#include <QtCore/QMap>
+#include <QtCore/QMapIterator>
 #include <QtCore/QSettings>
-
-#define AlgorithmIndex(a) ((a) - YubiKeyAlgorithm_Min)
-#define AlgorithmCount (AlgorithmIndex(YubiKeyAlgorithm_Max) + 1)
 
 // ==========================================================================
 // YubiKeyAuth::Private
 // ==========================================================================
 
 class YubiKeyAuth::Private :
+    public QObject,
     public YubiKeyConstants
 {
+    Q_OBJECT
+
 public:
-    Private();
+    typedef QMap<YubiKeyAlgorithm, QByteArray> AuthKeyMap;
+    typedef QMapIterator<YubiKeyAlgorithm, QByteArray> AuthKeyMapIterator;
+
+    Private(const QByteArray&);
     ~Private();
 
-    QSettings* getAuthSettings(const QByteArray);
-    const QString authFilePath(const QByteArray);
-    const QByteArray getAccessKey(const QByteArray, YubiKeyAlgorithm);
-    bool setAccessKey(const QByteArray, YubiKeyAlgorithm, const QByteArray, bool);
-    void clearPassword(const QByteArray, bool*);
-    void clearAuthSettings(const QByteArray);
+    void connect(YubiKeyAuth*);
+    bool setAccessKey(YubiKeyAlgorithm, const QByteArray&, bool);
+    void clear();
 
-    static GType digestType(YubiKeyAlgorithm aAlgorithm);
+    static GType digestType(YubiKeyAlgorithm);
+
+Q_SIGNALS:
+    void accessKeyChanged(YubiKeyAlgorithm);
 
 public:
-    static YubiKeyAuth* gInstance;
     static const QString AUTH_FILE;
+    static const QDir gConfigDir;
+    static QMap<QByteArray, Private*> gAuthMap;
 
 public:
     QAtomicInt iRef;
-    QMap<QByteArray, QByteArray> iAccessKeyMap[AlgorithmCount];
-
-private:
+    const QByteArray iYubiKeyId;
     QDir iConfigDir;
-    QMap<QByteArray, QSettings*> iAuthMap;
+    const QString iAuthFile;
+    QSettings* iSettings;
+    AuthKeyMap iAccessKeys;
 };
 
-YubiKeyAuth* YubiKeyAuth::Private::gInstance = Q_NULLPTR;
 const QString YubiKeyAuth::Private::AUTH_FILE("auth");
+const QDir YubiKeyAuth::Private::gConfigDir(YubiKeyUtil::configDir());
+QMap<QByteArray, YubiKeyAuth::Private*> YubiKeyAuth::Private::gAuthMap;
 
-YubiKeyAuth::Private::Private() :
+YubiKeyAuth::Private::Private(
+    const QByteArray& aYubiKeyId) :
     iRef(1),
-    iConfigDir(YubiKeyUtil::configDir())
+    iYubiKeyId(aYubiKeyId),
+    iConfigDir(gConfigDir.absoluteFilePath(HarbourUtil::toHex(aYubiKeyId))),
+    iAuthFile(iConfigDir.filePath(AUTH_FILE)),
+    iSettings(Q_NULLPTR)
 {
+    const QFileInfo authFile(iAuthFile);
+
+    // Load settings from the file
+    if (authFile.isFile() && authFile.isReadable()) {
+        HDEBUG("Loading" << qPrintable(iAuthFile));
+        iSettings = new QSettings(iAuthFile, QSettings::IniFormat, this);
+        for (int i = 0; i < YubiKeyUtil::AllAlgorithms.count(); i++) {
+            const YubiKeyAlgorithm alg = YubiKeyUtil::AllAlgorithms.at(i);
+            const QByteArray key(YubiKeyUtil::fromHex(iSettings->
+                value(YubiKeyUtil::algorithmName(alg)).toString()));
+
+            if (!key.isEmpty()) {
+                iAccessKeys.insert(alg, key);
+            }
+        }
+    } else {
+        HDEBUG(qPrintable(iAuthFile) << "doesn't exist");
+    }
+
+    gAuthMap.insert(iYubiKeyId, this);
 }
 
 YubiKeyAuth::Private::~Private()
 {
-    QMapIterator<QByteArray, QSettings*> it(iAuthMap);
-
-    while (it.hasNext()) {
-        delete it.next().value();
-    }
+    gAuthMap.remove(iYubiKeyId);
 }
 
-const QString
-YubiKeyAuth::Private::authFilePath(
-    const QByteArray aYubiKeyId)
+void
+YubiKeyAuth::Private::connect(
+    YubiKeyAuth* aAuth)
 {
-    return iConfigDir.absoluteFilePath(HarbourUtil::toHex(aYubiKeyId)) +
-        QDir::separator() + AUTH_FILE;
+    aAuth->connect(this, SIGNAL(accessKeyChanged(YubiKeyAlgorithm)),
+        SIGNAL(accessKeyChanged(YubiKeyAlgorithm)));
 }
 
-QSettings*
-YubiKeyAuth::Private::getAuthSettings(
-    const QByteArray aYubiKeyId)
-{
-    QSettings* auth = iAuthMap.value(aYubiKeyId);
-
-    if (!auth) {
-        const QString keyDirName(HarbourUtil::toHex(aYubiKeyId));
-        const QString keyDirPath(iConfigDir.absoluteFilePath(keyDirName));
-
-        if (iConfigDir.mkpath(keyDirName)) {
-            auth = new QSettings(keyDirPath + QDir::separator() + AUTH_FILE,
-                QSettings::IniFormat);
-            iAuthMap.insert(aYubiKeyId, auth);
-        } else {
-            HWARN("Failed to create" << qPrintable(keyDirPath));
-        }
-    }
-    return auth;
-}
-
-const QByteArray
-YubiKeyAuth::Private::getAccessKey(
-    const QByteArray aYubiKeyId,
-    YubiKeyAlgorithm aAlgorithm)
+bool
+YubiKeyAuth::Private::setAccessKey(
+    YubiKeyAlgorithm aAlgorithm,
+    const QByteArray& aAccessKey,
+    bool aSave)
 {
     if (aAlgorithm >= YubiKeyAlgorithm_Min &&
         aAlgorithm <= YubiKeyAlgorithm_Max &&
-        !aYubiKeyId.isEmpty()) {
-        QMap<QByteArray, QByteArray>* cache =
-            iAccessKeyMap + AlgorithmIndex(aAlgorithm);
-        QByteArray value(cache->value(aYubiKeyId));
+        iAccessKeys.value(aAlgorithm) != aAccessKey) {
+        const QString algName(YubiKeyUtil::algorithmName(aAlgorithm));
 
-        if (value.isEmpty()) {
-            // No cached value, pick one from the settings file
-            QSettings* settings = iAuthMap.value(aYubiKeyId);
+        iAccessKeys.insert(aAlgorithm, aAccessKey);
+        HDEBUG(qPrintable(HarbourUtil::toHex(iYubiKeyId)) << algName <<
+            "=>" << qPrintable(HarbourUtil::toHex(aAccessKey)));
 
-            if (!settings) {
-                // Load the config file
-                const QString path(authFilePath(aYubiKeyId));
-                const QFileInfo authFile(path);
-
-                if (authFile.isFile() && authFile.isReadable()) {
-                    HDEBUG("Loading" << qPrintable(path));
-                    settings = new QSettings(path, QSettings::IniFormat);
-                    iAuthMap.insert(aYubiKeyId, settings);
-                } else {
-                    HDEBUG(qPrintable(path) << "doesn't exist");
+        if (aSave) {
+            if (iConfigDir.exists() || iConfigDir.mkpath(".")) {
+                HWARN("Writing" << qPrintable(iAuthFile));
+                if (!iSettings) {
+                    iSettings = new QSettings(iAuthFile, QSettings::IniFormat,
+                        this);
                 }
+            } else {
+                HWARN("Failed to create" << qPrintable(iConfigDir.path()));
             }
-            if (settings) {
-                if (!(value = YubiKeyUtil::fromHex(settings->value(YubiKeyUtil::
-                    algorithmName(aAlgorithm)).toString())).isEmpty()) {
-                    cache->insert(aYubiKeyId, value);
-                }
+            iSettings->setValue(algName, HarbourUtil::toHex(aAccessKey));
+        } else {
+            // Remove the settings file without clearing the runtime keys
+            delete iSettings;
+            iSettings = Q_NULLPTR;
+
+            if (QFile::remove(iAuthFile)) {
+                HDEBUG("Removed" << qPrintable(iAuthFile));
+            } else {
+                HDEBUG("Failed to remove" << qPrintable(iAuthFile));
             }
         }
-        return value;
+
+        Q_EMIT accessKeyChanged(aAlgorithm);
+        return true;
     }
-    return QByteArray();
+    return false;
 }
 
+void
+YubiKeyAuth::Private::clear()
+{
+    const AuthKeyMap oldMap(iAccessKeys);
+    AuthKeyMapIterator it(oldMap);
+
+    iAccessKeys.clear();
+    if (iSettings) {
+        delete iSettings;
+        iSettings = Q_NULLPTR;
+
+        if (QFile::remove(iAuthFile)) {
+            HDEBUG("Removed" << qPrintable(iAuthFile));
+        } else {
+            HDEBUG("Failed to remove" << qPrintable(iAuthFile));
+        }
+    }
+
+    while (it.hasNext()) {
+        Q_EMIT accessKeyChanged(it.next().key());
+    }
+}
+
+/* static */
 GType
 YubiKeyAuth::Private::digestType(
     YubiKeyAlgorithm aAlgorithm)
@@ -190,181 +223,113 @@ YubiKeyAuth::Private::digestType(
     return (GType)0;
 }
 
-bool
-YubiKeyAuth::Private::setAccessKey(
-    const QByteArray aYubiKeyId,
-    YubiKeyAlgorithm aAlgorithm,
-    const QByteArray aAccessKey,
-    bool aSave)
-{
-    if (aAlgorithm >= YubiKeyAlgorithm_Min &&
-        aAlgorithm <= YubiKeyAlgorithm_Max) {
-        const int mapIndex = AlgorithmIndex(aAlgorithm);
-
-        if (!aSave) {
-            // Remove the settings file even if the key didn't change
-            clearAuthSettings(aYubiKeyId);
-        }
-
-        if (aAccessKey != iAccessKeyMap[mapIndex].value(aYubiKeyId)) {
-            iAccessKeyMap[mapIndex].insert(aYubiKeyId, aAccessKey);
-            HDEBUG(qPrintable(HarbourUtil::toHex(aYubiKeyId)) << aAlgorithm <<
-                "=>" << qPrintable(HarbourUtil::toHex(aAccessKey)));
-            if (aSave) {
-                QSettings* settings = iAuthMap.value(aYubiKeyId);
-
-                if (!settings) {
-                    const QString path(authFilePath(aYubiKeyId));
-                    const QFileInfo authFile(path);
-                    QDir authFileDir(authFile.dir());
-
-                    if (authFileDir.mkpath(".")) {
-                        HWARN("Writing" << qPrintable(path));
-                        settings = new QSettings(path, QSettings::IniFormat);
-                        iAuthMap.insert(aYubiKeyId, settings);
-                    } else {
-                        HWARN("Failed to create" <<
-                            qPrintable(authFileDir.absolutePath()));
-                    }
-                }
-                if (settings) {
-                    settings->setValue(YubiKeyUtil::algorithmName(aAlgorithm),
-                        HarbourUtil::toHex(aAccessKey));
-                }
-            }
-            return true;
-        }
-    }
-    // Nothing has changed
-    return false;
-}
-
-void
-YubiKeyAuth::Private::clearAuthSettings(
-    const QByteArray aYubiKeyId)
-{
-    QSettings* settings = iAuthMap.value(aYubiKeyId);
-
-    if (settings) {
-        const QString fileName(settings->fileName());
-
-        iAuthMap.remove(aYubiKeyId);
-        delete settings;
-        settings = Q_NULLPTR;
-
-        if (QFile::remove(fileName)) {
-            HDEBUG("Removed" << qPrintable(fileName));
-        } else {
-            HDEBUG("Failed to remove" << qPrintable(fileName));
-        }
-    }
-}
-
-void
-YubiKeyAuth::Private::clearPassword(
-    const QByteArray aYubiKeyId,
-    bool* aChanged)
-{
-    clearAuthSettings(aYubiKeyId);
-    for (int i = 0; i < AlgorithmCount; i++) {
-        aChanged[i] = (iAccessKeyMap[i].remove(aYubiKeyId) > 0);
-    }
-}
-
 // ==========================================================================
 // YubiKeyAuth
 // ==========================================================================
 
-YubiKeyAuth::YubiKeyAuth() :
-    iPrivate(new Private)
+YubiKeyAuth::YubiKeyAuth(
+    const QByteArray aYubiKeyId) :
+    iPrivate(Private::gAuthMap.value(aYubiKeyId))
 {
     qRegisterMetaType<YubiKeyAlgorithm>();
-    HASSERT(!Private::gInstance);
-    Private::gInstance = this;
+    if (iPrivate) {
+        iPrivate->iRef.ref();
+        iPrivate->connect(this);
+    } else if (!aYubiKeyId.isEmpty()) {
+        iPrivate = new Private(aYubiKeyId);
+        iPrivate->connect(this);
+    }
 }
+
+YubiKeyAuth::YubiKeyAuth(
+    const YubiKeyAuth& aAuth) :
+    QObject(Q_NULLPTR),
+    iPrivate(aAuth.iPrivate)
+{
+    if (iPrivate) {
+        iPrivate->iRef.ref();
+        iPrivate->connect(this);
+    }
+}
+
+YubiKeyAuth::YubiKeyAuth() :
+    iPrivate(Q_NULLPTR)
+{}
 
 YubiKeyAuth::~YubiKeyAuth()
 {
-    delete iPrivate;
-
-    HASSERT(Private::gInstance == this);
-    Private::gInstance = Q_NULLPTR;
-}
-
-YubiKeyAuth*
-YubiKeyAuth::get()
-{
-    if (Private::gInstance) {
-        return Private::gInstance->ref();
-    } else {
-        return new YubiKeyAuth;
+    if (iPrivate) {
+        iPrivate->disconnect(this);
+        if (!iPrivate->iRef.deref()) {
+            delete iPrivate;
+        }
     }
 }
 
-YubiKeyAuth*
-YubiKeyAuth::ref()
+YubiKeyAuth&
+YubiKeyAuth::operator=(
+    const YubiKeyAuth& aAuth)
 {
-    iPrivate->iRef.ref();
-    return this;
-}
-
-void
-YubiKeyAuth::unref()
-{
-    if (!iPrivate->iRef.deref()) {
-        delete this;
+    if (iPrivate != aAuth.iPrivate) {
+        if (iPrivate) {
+            iPrivate->disconnect(this);
+            if (!iPrivate->iRef.deref()) {
+                delete iPrivate;
+            }
+        }
+        iPrivate = aAuth.iPrivate;
+        if (iPrivate) {
+            iPrivate->iRef.ref();
+            iPrivate->connect(this);
+        }
     }
+    return *this;
 }
 
-const QByteArray
+bool
+YubiKeyAuth::isValid() const
+{
+    return iPrivate != Q_NULLPTR;
+}
+
+QByteArray
+YubiKeyAuth::yubiKeyId() const
+{
+    return iPrivate ? iPrivate->iYubiKeyId : QByteArray();
+}
+
+QByteArray
 YubiKeyAuth::getAccessKey(
-    const QByteArray aYubiKeyId,
     YubiKeyAlgorithm aAlgorithm) const
 {
-    return iPrivate->getAccessKey(aYubiKeyId, aAlgorithm);
+    return iPrivate ? iPrivate->iAccessKeys.value(aAlgorithm) : QByteArray();
 }
 
 bool
 YubiKeyAuth::setAccessKey(
-    const QByteArray aYubiKeyId,
     YubiKeyAlgorithm aAlgorithm,
     const QByteArray aAccessKey,
     bool aSave)
 {
-    if (iPrivate->setAccessKey(aYubiKeyId, aAlgorithm, aAccessKey, aSave)) {
-        Q_EMIT accessKeyChanged(aYubiKeyId, aAlgorithm);
-        return true;
-    } else {
-        return false;
-    }
+    return iPrivate && iPrivate->setAccessKey(aAlgorithm, aAccessKey, aSave);
 }
 
 bool
 YubiKeyAuth::setPassword(
-    const QByteArray aYubiKeyId,
     YubiKeyAlgorithm aAlgorithm,
     const QString aPassword,
     bool aSave)
 {
-    return setAccessKey(aYubiKeyId, aAlgorithm,
-        calculateAccessKey(aYubiKeyId, aAlgorithm, aPassword), aSave);
+    return iPrivate && iPrivate->setAccessKey(aAlgorithm,
+        calculateAccessKey(iPrivate->iYubiKeyId, aAlgorithm, aPassword),
+        aSave);
 }
 
 void
-YubiKeyAuth::clearPassword(
-    const QByteArray aYubiKeyId)
+YubiKeyAuth::clearPassword()
 {
-    bool changed[AlgorithmCount];
-
-    // First update the state
-    iPrivate->clearPassword(aYubiKeyId, changed);
-
-    // Then emit signals
-    for (int i = 0; i < AlgorithmCount; i++) {
-        if (changed[i]) {
-            Q_EMIT accessKeyChanged(aYubiKeyId, (YubiKeyAlgorithm)
-                (YubiKeyAlgorithm_Min + i));
-        }
+    if (iPrivate) {
+        iPrivate->clear();
     }
 }
 
@@ -409,3 +374,5 @@ YubiKeyAuth::calculateResponse(
     }
     return QByteArray();
 }
+
+#include "YubiKeyAuth.moc"

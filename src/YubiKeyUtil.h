@@ -48,6 +48,7 @@
 #include "HarbourUtil.h"
 
 #include <QtCore/QByteArray>
+#include <QtCore/QList>
 #include <QtCore/QDir>
 #include <QtCore/QString>
 #include <QtCore/QObject>
@@ -61,6 +62,7 @@ class YubiKeyUtil:
     Q_OBJECT
     Q_ENUMS(Constants)
     YubiKeyUtil() : QObject(Q_NULLPTR) {}
+    class Private;
 
 public:
     // Expose some constants to QML
@@ -76,9 +78,10 @@ public:
     static const QString ALGORITHM_SHA1;
     static const QString ALGORITHM_SHA256;
     static const QString ALGORITHM_SHA512;
+    static const QList<YubiKeyAlgorithm> AllAlgorithms;
 
     static QDir configDir();
-    static QDir configDir(const QByteArray);
+    static QDir configDir(const QByteArray&);
 
     static QString hashUtf8(const QByteArray&);
     static QString steamHashUtf8(const QByteArray&);
@@ -98,7 +101,8 @@ public:
     static const FoilBytes* fromByteArray(FoilBytes*, const QByteArray&);
     static QByteArray toByteArray(const GUtilData*);
     static QByteArray toByteArray(GBytes*, bool aDropBytes = true);
-    static QByteArray fromHex(const QString);
+    static QByteArray fromHex(const QString& aHex)
+        { return QByteArray::fromHex(aHex.toLatin1()); }
     static inline QString toHex(const GUtilData* aData)
         { return HarbourUtil::toHex(aData->bytes, aData->size); }
 
@@ -108,13 +112,13 @@ public:
 
     static const QString algorithmName(YubiKeyAlgorithm);
     static uchar algorithmValue(YubiKeyAlgorithm);
-    static YubiKeyAlgorithm algorithmFromName(const QString);
+    static YubiKeyAlgorithm algorithmFromName(const QString&);
     static YubiKeyAlgorithm algorithmFromValue(uchar);
     static YubiKeyAlgorithm validAlgorithm(int);
 
     static YubiKeyTokenType validType(int);
 
-    Q_INVOKABLE static bool isValidBase32(const QString);
+    Q_INVOKABLE static bool isValidBase32(const QString&);
 
     // Callback for qmlRegisterSingletonType<YubiKeyUtil>
     static QObject* createSingleton(QQmlEngine*, QJSEngine*);

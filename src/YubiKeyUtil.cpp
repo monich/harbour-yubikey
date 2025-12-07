@@ -49,9 +49,28 @@
 #include <QtCore/QStandardPaths>
 #include <QtCore/QCryptographicHash>
 
+class YubiKeyUtil::Private
+{
+public:
+    static QList<YubiKeyAlgorithm> allAlgorithms();
+};
+
 const QString YubiKeyUtil::ALGORITHM_SHA1("SHA1");
 const QString YubiKeyUtil::ALGORITHM_SHA256("SHA256");
 const QString YubiKeyUtil::ALGORITHM_SHA512("SHA512");
+const QList<YubiKeyAlgorithm> YubiKeyUtil::AllAlgorithms(Private::allAlgorithms());
+
+QList<YubiKeyAlgorithm>
+YubiKeyUtil::Private::allAlgorithms()
+{
+    QList<YubiKeyAlgorithm> list;
+
+    list.reserve(YubiKeyAlgorithm_Max - YubiKeyAlgorithm_Min + 1);
+    for (int alg = YubiKeyAlgorithm_Min; alg <= YubiKeyAlgorithm_Max; alg++) {
+        list.append((YubiKeyAlgorithm) alg);
+    }
+    return list;
+}
 
 QDir
 YubiKeyUtil::configDir()
@@ -62,7 +81,7 @@ YubiKeyUtil::configDir()
 
 QDir
 YubiKeyUtil::configDir(
-    const QByteArray aYubiKeyId)
+    const QByteArray& aYubiKeyId)
 {
     return QDir(configDir().absoluteFilePath(HarbourUtil::toHex(aYubiKeyId)));
 }
@@ -154,24 +173,6 @@ YubiKeyUtil::toByteArray(
     return QByteArray();
 }
 
-QByteArray
-YubiKeyUtil::fromHex(
-    const QString aHex)
-{
-    if (!aHex.isEmpty() && !(aHex.length() & 1)) {
-        const QByteArray hex(aHex.toLatin1());
-        const int len = hex.size();
-        if (len == aHex.length()) {
-            QByteArray bytes;
-            bytes.resize(len/2);
-            if (gutil_hex2bin(hex.data(), len, bytes.data())) {
-                return bytes;
-            }
-        }
-    }
-    return QByteArray();
-}
-
 uchar
 YubiKeyUtil::readTLV(
     GUtilRange* aRange,
@@ -246,7 +247,7 @@ YubiKeyUtil::algorithmValue(
 
 YubiKeyAlgorithm
 YubiKeyUtil::algorithmFromName(
-    const QString aName)
+    const QString& aName)
 {
     const QString name(aName.toUpper());
 
@@ -298,7 +299,7 @@ YubiKeyUtil::validType(
 
 bool
 YubiKeyUtil::isValidBase32(
-    const QString aBase32)
+    const QString& aBase32)
 {
     return HarbourBase32::isValidBase32(aBase32);
 }

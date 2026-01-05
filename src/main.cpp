@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -37,12 +37,12 @@
  * any official policies, either expressed or implied.
  */
 
+#include "YubiKeyAppSettings.h"
 #include "YubiKeyAuthListModel.h"
 #include "YubiKeyCard.h"
 #include "YubiKeyDefs.h"
 #include "YubiKeyImportModel.h"
 #include "YubiKeyRecognizer.h"
-#include "YubiKeySettings.h"
 #include "YubiKeyToken.h"
 #include "YubiKeyUtil.h"
 
@@ -77,7 +77,7 @@ static void register_types(const char* uri, int v1 = 1, int v2 = 0)
     REGISTER_SINGLETON_TYPE(uri, v1, v2, NfcAdapter);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, NfcSystem);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeyRecognizer);
-    REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeySettings);
+    REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeyAppSettings);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeyUtil);
     REGISTER_TYPE(uri, v1, v2, HarbourSingleImageProvider);
     REGISTER_TYPE(uri, v1, v2, NfcMode);

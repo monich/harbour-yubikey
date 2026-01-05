@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -35,20 +37,19 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_SETTINGS_H
-#define _YUBIKEY_SETTINGS_H
+#ifndef _YUBIKEY_APP_SETTINGS_H
+#define _YUBIKEY_APP_SETTINGS_H
 
-#include <QObject>
-#include <QSize>
+#include <QtCore/QObject>
+#include <QtCore/QSize>
 
 class QQmlEngine;
 class QJSEngine;
 
-class YubiKeySettings :
+class YubiKeyAppSettings :
     public QObject
 {
     Q_OBJECT
-    Q_DISABLE_COPY(YubiKeySettings)
     Q_PROPERTY(qreal scanZoom READ scanZoom WRITE setScanZoom NOTIFY scanZoomChanged)
     Q_PROPERTY(qreal maxZoom READ maxZoom WRITE setMaxZoom NOTIFY maxZoomChanged)
     Q_PROPERTY(bool volumeZoom READ volumeZoom WRITE setVolumeZoom NOTIFY volumeZoomChanged)
@@ -59,10 +60,10 @@ class YubiKeySettings :
     Q_PROPERTY(QSize narrowCameraResolution READ narrowCameraResolution WRITE setNarrowCameraResolution NOTIFY narrowCameraResolutionChanged)
 
 public:
-    explicit YubiKeySettings(QObject* aParent = Q_NULLPTR);
-    ~YubiKeySettings();
+    explicit YubiKeyAppSettings(QObject* aParent = Q_NULLPTR);
+    ~YubiKeyAppSettings();
 
-    // Callback for qmlRegisterSingletonType<YubiKeySettings>
+    // Callback for qmlRegisterSingletonType<YubiKeyAppSettings>
     static QObject* createSingleton(QQmlEngine*, QJSEngine*);
 
     qreal scanZoom() const;
@@ -98,4 +99,4 @@ private:
     Private* iPrivate;
 };
 
-#endif // _YUBIKEY_SETTINGS_H
+#endif // _YUBIKEY_APP_SETTINGS_H

@@ -12,7 +12,8 @@ Page {
     id: thisPage
 
     property Item _viewFinder
-    readonly property bool _canUseVolumeKeys: YubiKeySettings.volumeZoom && Qt.application.active &&
+    property variant _settings: YubiKeyAppSettings
+    readonly property bool _canUseVolumeKeys: _settings.volumeZoom && Qt.application.active &&
         (status === PageStatus.Active)
     readonly property bool canScan: _viewFinder && _viewFinder.source.cameraState === Camera.ActiveState
     readonly property bool canShowViewFinder: Qt.application.active &&
@@ -32,7 +33,7 @@ Page {
         if (canShowViewFinder) {
             _viewFinder = viewFinderComponent.createObject(viewFinderContainer, {
                 viewfinderResolution: viewFinderContainer.viewfinderResolution,
-                digitalZoom: YubiKeySettings.scanZoom,
+                digitalZoom: _settings.scanZoom,
                 orientation: orientationAngle()
             })
 
@@ -149,7 +150,7 @@ Page {
         id: viewFinderComponent
 
         ViewFinder {
-            onMaximumDigitalZoom: YubiKeySettings.maxZoom = value
+            onMaximumDigitalZoom: _settings.maxZoom = value
         }
     }
 
@@ -186,15 +187,15 @@ Page {
             id: viewFinderContainer
 
             readonly property bool canSwitchResolutions:
-                YubiKeySettings.wideCameraResolution.width > 0 && YubiKeySettings.wideCameraResolution.height > 0 &&
-                YubiKeySettings.narrowCameraResolution.width > 0 && YubiKeySettings.narrowCameraResolution.height > 0
+                _settings.wideCameraResolution.width > 0 && _settings.wideCameraResolution.height > 0 &&
+                _settings.narrowCameraResolution.width > 0 && _settings.narrowCameraResolution.height > 0
             readonly property size viewfinderResolution: canSwitchResolutions ?
-                (YubiKeySettings.wideScan ? YubiKeySettings.wideCameraResolution : YubiKeySettings.narrowCameraResolution) :
+                (_settings.wideScan ? _settings.wideCameraResolution : _settings.narrowCameraResolution) :
                 Qt.size(0,0)
             readonly property real ratio: canSwitchResolutions ?
-                (YubiKeySettings.wideScan ? YubiKeySettings.wideCameraRatio : YubiKeySettings.narrowCameraRatio) :
-                (YubiKeySettings.wideCameraResolution.width > 0 && YubiKeySettings.wideCameraResolution.height > 0) ?
-                YubiKeySettings.wideCameraRatio : YubiKeySettings.narrowCameraRatio
+                (_settings.wideScan ? _settings.wideCameraRatio : _settings.narrowCameraRatio) :
+                (_settings.wideCameraResolution.width > 0 && _settings.wideCameraResolution.height > 0) ?
+                _settings.wideCameraRatio : _settings.narrowCameraRatio
 
             readonly property int portraitWidth: Math.floor((parent.height/parent.width > ratio) ? parent.width : parent.height/ratio)
             readonly property int portraitHeight: Math.floor((parent.height/parent.width > ratio) ? (parent.width * ratio) : parent.height)
@@ -222,14 +223,14 @@ Page {
             }
 
             function updateSupportedResolution_4_3(res) {
-                if (res.width > YubiKeySettings.wideCameraResolution.width) {
-                    YubiKeySettings.wideCameraResolution = res
+                if (res.width > _settings.wideCameraResolution.width) {
+                    _settings.wideCameraResolution = res
                 }
             }
 
             function updateSupportedResolution_16_9(res) {
-                if (res.width > YubiKeySettings.narrowCameraResolution.width) {
-                    YubiKeySettings.narrowCameraResolution = res
+                if (res.width > _settings.narrowCameraResolution.width) {
+                    _settings.narrowCameraResolution = res
                 }
             }
 
@@ -268,19 +269,19 @@ Page {
             leftMargin: 0
             rightMargin: 0
             minimumValue: 1.0
-            maximumValue: YubiKeySettings.maxZoom
+            maximumValue: _settings.maxZoom
             value: 1.0
             stepSize: (maximumValue - minimumValue)/100
 
             onValueChanged: {
-                YubiKeySettings.scanZoom = value
+                _settings.scanZoom = value
                 if (_viewFinder) {
                     _viewFinder.digitalZoom = value
                 }
             }
 
             Component.onCompleted: {
-                value = YubiKeySettings.scanZoom
+                value = _settings.scanZoom
                 if (_viewFinder) {
                     _viewFinder.digitalZoom = value
                 }

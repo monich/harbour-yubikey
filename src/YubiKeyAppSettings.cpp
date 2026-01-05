@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -36,7 +38,7 @@
  */
 
 #include "YubiKeyDefs.h"
-#include "YubiKeySettings.h"
+#include "YubiKeyAppSettings.h"
 
 #include "HarbourDebug.h"
 
@@ -61,15 +63,15 @@
 #define CAMERA_DCONF_RESOLUTION_16_9    CAMERA_DCONF_PATH_("viewfinderResolution_16_9")
 
 // ==========================================================================
-// YubiKeySettings::Private
+// YubiKeyAppSettings::Private
 // ==========================================================================
 
-class YubiKeySettings::Private
+class YubiKeyAppSettings::Private
 {
 public:
-    Private(YubiKeySettings* aParent);
+    Private(YubiKeyAppSettings*);
 
-    static QSize toSize(const QVariant);
+    static QSize toSize(const QVariant&);
     static QSize size_4_3(int);
     static QSize size_16_9(int);
 
@@ -87,7 +89,7 @@ public:
     MGConfItem* iResolution_16_9;
 };
 
-YubiKeySettings::Private::Private(YubiKeySettings* aParent) :
+YubiKeyAppSettings::Private::Private(YubiKeyAppSettings* aParent) :
     iDefaultResolution_4_3(toSize(MGConfItem(CAMERA_DCONF_RESOLUTION_4_3).value()).width()),
     iDefaultResolution_16_9(toSize(MGConfItem(CAMERA_DCONF_RESOLUTION_16_9).value()).width()),
     iMaxZoom(new MGConfItem(KEY_MAX_ZOOM, aParent)),
@@ -108,8 +110,8 @@ YubiKeySettings::Private::Private(YubiKeySettings* aParent) :
 }
 
 QSize
-YubiKeySettings::Private::toSize(
-    const QVariant aVariant)
+YubiKeyAppSettings::Private::toSize(
+    const QVariant& aVariant)
 {
     // e.g. "1920x1080"
     if (aVariant.isValid()) {
@@ -129,65 +131,65 @@ YubiKeySettings::Private::toSize(
 }
 
 QSize
-YubiKeySettings::Private::size_4_3(
+YubiKeyAppSettings::Private::size_4_3(
     int aWidth)
 {
     return QSize(aWidth, aWidth * 3 / 4);
 }
 
 QSize
-YubiKeySettings::Private::size_16_9(
+YubiKeyAppSettings::Private::size_16_9(
     int aWidth)
 {
     return QSize(aWidth, aWidth * 9 / 16);
 }
 
 QSize
-YubiKeySettings::Private::resolution_4_3()
+YubiKeyAppSettings::Private::resolution_4_3()
 {
     return size_4_3(qMax(iResolution_4_3->value(iDefaultResolution_4_3).toInt(), 0));
 }
 
 QSize
-YubiKeySettings::Private::resolution_16_9()
+YubiKeyAppSettings::Private::resolution_16_9()
 {
     return size_16_9(qMax(iResolution_16_9->value(iDefaultResolution_16_9).toInt(), 0));
 }
 
 // ==========================================================================
-// YubiKeySettings
+// YubiKeyAppSettings
 // ==========================================================================
 
-YubiKeySettings::YubiKeySettings(QObject* aParent) :
+YubiKeyAppSettings::YubiKeyAppSettings(QObject* aParent) :
     QObject(aParent),
     iPrivate(new Private(this))
 {
 }
 
-YubiKeySettings::~YubiKeySettings()
+YubiKeyAppSettings::~YubiKeyAppSettings()
 {
     delete iPrivate;
 }
 
-// Callback for qmlRegisterSingletonType<YubiKeySettings>
+// Callback for qmlRegisterSingletonType<YubiKeyAppSettings>
 QObject*
-YubiKeySettings::createSingleton(
+YubiKeyAppSettings::createSingleton(
     QQmlEngine*,
     QJSEngine*)
 {
-    return new YubiKeySettings;
+    return new YubiKeyAppSettings;
 }
 
 // scanZoom
 
 qreal
-YubiKeySettings::scanZoom() const
+YubiKeyAppSettings::scanZoom() const
 {
     return iPrivate->iScanZoom->value(DEFAULT_SCAN_ZOOM).toReal();
 }
 
 void
-YubiKeySettings::setScanZoom(
+YubiKeyAppSettings::setScanZoom(
     qreal aValue)
 {
     HDEBUG(aValue);
@@ -197,13 +199,13 @@ YubiKeySettings::setScanZoom(
 // maxZoom
 
 qreal
-YubiKeySettings::maxZoom() const
+YubiKeyAppSettings::maxZoom() const
 {
     return iPrivate->iMaxZoom->value(DEFAULT_MAX_ZOOM).toReal();
 }
 
 void
-YubiKeySettings::setMaxZoom(
+YubiKeyAppSettings::setMaxZoom(
     qreal aValue)
 {
     HDEBUG(aValue);
@@ -213,13 +215,13 @@ YubiKeySettings::setMaxZoom(
 // volumeZoom
 
 bool
-YubiKeySettings::volumeZoom() const
+YubiKeyAppSettings::volumeZoom() const
 {
     return iPrivate->iVolumeZoom->value(DEFAULT_VOLUME_ZOOM).toBool();
 }
 
 void
-YubiKeySettings::setVolumeZoom(
+YubiKeyAppSettings::setVolumeZoom(
     bool aValue)
 {
     HDEBUG(aValue);
@@ -229,13 +231,13 @@ YubiKeySettings::setVolumeZoom(
 // wideScan
 
 bool
-YubiKeySettings::wideScan() const
+YubiKeyAppSettings::wideScan() const
 {
     return iPrivate->iWideScan->value(DEFAULT_WIDE_SCAN).toBool();
 }
 
 void
-YubiKeySettings::setWideScan(
+YubiKeyAppSettings::setWideScan(
     bool aValue)
 {
     iPrivate->iWideScan->set(aValue);
@@ -244,7 +246,7 @@ YubiKeySettings::setWideScan(
 // wideCameraRatio
 
 qreal
-YubiKeySettings::wideCameraRatio() const
+YubiKeyAppSettings::wideCameraRatio() const
 {
     return 4./3;
 }
@@ -252,13 +254,13 @@ YubiKeySettings::wideCameraRatio() const
 // wideCameraResolution
 
 QSize
-YubiKeySettings::wideCameraResolution() const
+YubiKeyAppSettings::wideCameraResolution() const
 {
     return iPrivate->resolution_4_3();
 }
 
 void
-YubiKeySettings::setWideCameraResolution(
+YubiKeyAppSettings::setWideCameraResolution(
     QSize aSize)
 {
     HDEBUG(aSize);
@@ -268,19 +270,19 @@ YubiKeySettings::setWideCameraResolution(
 // narrowCameraRatio
 
 qreal
-YubiKeySettings::narrowCameraRatio() const
+YubiKeyAppSettings::narrowCameraRatio() const
 {
     return 16./9;
 }
 
 QSize
-YubiKeySettings::narrowCameraResolution() const
+YubiKeyAppSettings::narrowCameraResolution() const
 {
     return iPrivate->resolution_16_9();
 }
 
 void
-YubiKeySettings::setNarrowCameraResolution(
+YubiKeyAppSettings::setNarrowCameraResolution(
     QSize aSize)
 {
     HDEBUG(aSize);

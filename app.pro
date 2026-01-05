@@ -64,6 +64,7 @@ HEADERS += \
     src/QrCodeDecoder.h \
     src/QrCodeScanner.h \
     src/YubiKey.h \
+    src/YubiKeyAppSettings.h \
     src/YubiKeyAuth.h \
     src/YubiKeyAuthListModel.h \
     src/YubiKeyCard.h \
@@ -72,7 +73,6 @@ HEADERS += \
     src/YubiKeyConstants.h \
     src/YubiKeyImportModel.h \
     src/YubiKeyRecognizer.h \
-    src/YubiKeySettings.h \
     src/YubiKeyTag.h \
     src/YubiKeyToken.h \
     src/YubiKeyTypes.h \
@@ -83,6 +83,7 @@ SOURCES += \
     src/QrCodeDecoder.cpp \
     src/QrCodeScanner.cpp \
     src/YubiKey.cpp \
+    src/YubiKeyAppSettings.cpp \
     src/YubiKeyAuth.cpp \
     src/YubiKeyAuthListModel.cpp \
     src/YubiKeyCard.cpp \
@@ -91,7 +92,6 @@ SOURCES += \
     src/YubiKeyRecognizer.cpp \
     src/YubiKeyTag.cpp \
     src/YubiKeyToken.cpp \
-    src/YubiKeySettings.cpp \
     src/YubiKeyUtil.cpp
 
 # libfoil

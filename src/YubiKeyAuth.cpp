@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -83,7 +83,6 @@ Q_SIGNALS:
 
 public:
     static const QString AUTH_FILE;
-    static const QDir gConfigDir;
     static QMap<QByteArray, Private*> gAuthMap;
 
 public:
@@ -96,14 +95,13 @@ public:
 };
 
 const QString YubiKeyAuth::Private::AUTH_FILE("auth");
-const QDir YubiKeyAuth::Private::gConfigDir(YubiKeyUtil::configDir());
 QMap<QByteArray, YubiKeyAuth::Private*> YubiKeyAuth::Private::gAuthMap;
 
 YubiKeyAuth::Private::Private(
     const QByteArray& aYubiKeyId) :
     iRef(1),
     iYubiKeyId(aYubiKeyId),
-    iConfigDir(gConfigDir.absoluteFilePath(HarbourUtil::toHex(aYubiKeyId))),
+    iConfigDir(YubiKeyUtil::configDir(aYubiKeyId)),
     iAuthFile(iConfigDir.filePath(AUTH_FILE)),
     iSettings(Q_NULLPTR)
 {
@@ -167,7 +165,9 @@ YubiKeyAuth::Private::setAccessKey(
             } else {
                 HWARN("Failed to create" << qPrintable(iConfigDir.path()));
             }
-            iSettings->setValue(algName, HarbourUtil::toHex(aAccessKey));
+            if (iSettings) {
+                iSettings->setValue(algName, HarbourUtil::toHex(aAccessKey));
+            }
         } else {
             // Remove the settings file without clearing the runtime keys
             delete iSettings;
@@ -228,7 +228,7 @@ YubiKeyAuth::Private::digestType(
 // ==========================================================================
 
 YubiKeyAuth::YubiKeyAuth(
-    const QByteArray aYubiKeyId) :
+    QByteArray aYubiKeyId) :
     iPrivate(Private::gAuthMap.value(aYubiKeyId))
 {
     qRegisterMetaType<YubiKeyAlgorithm>();
@@ -308,7 +308,7 @@ YubiKeyAuth::getAccessKey(
 bool
 YubiKeyAuth::setAccessKey(
     YubiKeyAlgorithm aAlgorithm,
-    const QByteArray aAccessKey,
+    QByteArray aAccessKey,
     bool aSave)
 {
     return iPrivate && iPrivate->setAccessKey(aAlgorithm, aAccessKey, aSave);
@@ -317,7 +317,7 @@ YubiKeyAuth::setAccessKey(
 bool
 YubiKeyAuth::setPassword(
     YubiKeyAlgorithm aAlgorithm,
-    const QString aPassword,
+    QString aPassword,
     bool aSave)
 {
     return iPrivate && iPrivate->setAccessKey(aAlgorithm,
@@ -335,9 +335,9 @@ YubiKeyAuth::clearPassword()
 
 QByteArray
 YubiKeyAuth::calculateAccessKey(
-    const QByteArray aYubiKeyId,
+    QByteArray aYubiKeyId,
     YubiKeyAlgorithm aAlgorithm,
-    const QString aPassword)
+    QString aPassword)
 {
     const QByteArray passwordUtf8(aPassword.toUtf8());
     FoilBytes salt;
@@ -354,8 +354,8 @@ YubiKeyAuth::calculateAccessKey(
 
 QByteArray
 YubiKeyAuth::calculateResponse(
-    const QByteArray aAccessKey,
-    const QByteArray aChallenge,
+    QByteArray aAccessKey,
+    QByteArray aChallenge,
     YubiKeyAlgorithm aAlgorithm)
 {
     if (!aAccessKey.isEmpty()) {

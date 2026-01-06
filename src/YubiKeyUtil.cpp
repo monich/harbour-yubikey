@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -73,17 +73,13 @@ YubiKeyUtil::Private::allAlgorithms()
 }
 
 QDir
-YubiKeyUtil::configDir()
-{
-    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
-        QStringLiteral("/" YUBIKEY_APP_NAME);
-}
-
-QDir
 YubiKeyUtil::configDir(
     const QByteArray& aYubiKeyId)
 {
-    return QDir(configDir().absoluteFilePath(HarbourUtil::toHex(aYubiKeyId)));
+    static const QDir configRoot(QStandardPaths::writableLocation(
+        QStandardPaths::GenericDataLocation) + "/" YUBIKEY_APP_NAME);
+
+    return QDir(configRoot.absoluteFilePath(HarbourUtil::toHex(aYubiKeyId)));
 }
 
 QString

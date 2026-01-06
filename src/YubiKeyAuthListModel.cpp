@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -10,23 +10,27 @@
  *
  *  1. Redistributions of source code must retain the above copyright
  *     notice, this list of conditions and the following disclaimer.
+ *
  *  2. Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer
  *     in the documentation and/or other materials provided with the
  *     distribution.
+ *
  *  3. Neither the names of the copyright holders nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING
- * IN ANY WAY OUT OF THE USE OR INABILITY TO USE THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * The views and conclusions contained in the software and documentation
  * are those of the authors and should not be interpreted as representing
@@ -34,7 +38,7 @@
  */
 
 #include "YubiKeyAuthListModel.h"
-#include "YubiKeyCardSettings.h"
+#include "YubiKeySettings.h"
 #include "YubiKeyConstants.h"
 #include "YubiKeyUtil.h"
 
@@ -99,7 +103,7 @@ public:
 #undef LAST
     };
 
-    ModelData(const QByteArray, YubiKeyTokenType, YubiKeyAlgorithm);
+    ModelData(const QByteArray&, YubiKeyTokenType, YubiKeyAlgorithm);
 
     QVariant get(Role) const;
     bool canBeSteamToken() const;
@@ -126,7 +130,7 @@ public:
 };
 
 YubiKeyAuthListModel::ModelData::ModelData(
-    const QByteArray aUtf8Name,
+    const QByteArray& aUtf8Name,
     YubiKeyTokenType aType,
     YubiKeyAlgorithm aAlgorithm) :
     iUtf8Name(aUtf8Name),
@@ -233,8 +237,8 @@ public:
     List(const QString aHexData, const List, const QStringList);
 
     ModelData* dataAt(int) const;
-    int findUtf8(const QByteArray, int) const;
-    int findName(const QString) const;
+    int findUtf8(const QByteArray&, int) const;
+    int findName(const QString&) const;
 };
 
 YubiKeyAuthListModel::ModelData::List::List(
@@ -299,7 +303,7 @@ YubiKeyAuthListModel::ModelData::List::dataAt(
 
 int
 YubiKeyAuthListModel::ModelData::List::findUtf8(
-    const QByteArray aUtf8,
+    const QByteArray& aUtf8,
     int aIndex) const
 {
     const YubiKeyAuthListModel::ModelData* data = dataAt(aIndex);
@@ -320,7 +324,7 @@ YubiKeyAuthListModel::ModelData::List::findUtf8(
 
 int
 YubiKeyAuthListModel::ModelData::List::findName(
-    const QString aName) const
+    const QString& aName) const
 {
     const int n = count();
     for (int i = 0; i < n; i++) {
@@ -353,12 +357,12 @@ public:
 
     void queueSignal(Signal);
     void emitQueuedSignals();
-    void setYubiKeyId(const QString);
+    void setYubiKeyId(const QString&);
     void setItems(const ModelData::List);
     void setFavoriteTokenType(YubiKeyTokenType);
     void setFavoriteMarkedForRefresh(bool);
-    void setFavoriteName(const QString);
-    void setFavoritePassword(const QString);
+    void setFavoriteName(const QString&);
+    void setFavoritePassword(const QString&);
     void setFavoritePasswordExpired(bool);
     void updateMarkedForRefresh();
     void updateMarkedForDeletion();
@@ -371,7 +375,7 @@ public:
     SignalMask iQueuedSignals;
     Signal iFirstQueuedSignal;
     YubiKeyAuthListModel* iModel;
-    YubiKeyCardSettings* iCardSettings;
+    YubiKeySettings iYubiKeySettings;
     QString iYubiKeyId;
     QString iHexAuthList;
     QString iHexAuthData;
@@ -392,7 +396,6 @@ YubiKeyAuthListModel::Private::Private(
     iQueuedSignals(0),
     iFirstQueuedSignal(SignalCount),
     iModel(aModel),
-    iCardSettings(Q_NULLPTR),
     iFavoriteTokenType(YubiKeyTokenType_Unknown),
     iFavoriteMarkedForRefresh(false),
     iFavoritePasswordExpired(false),
@@ -402,7 +405,6 @@ YubiKeyAuthListModel::Private::Private(
 
 YubiKeyAuthListModel::Private::~Private()
 {
-    delete iCardSettings;
     qDeleteAll(iList);
 }
 
@@ -452,23 +454,19 @@ YubiKeyAuthListModel::Private::emitQueuedSignals()
 QString
 YubiKeyAuthListModel::Private::getFavoriteHash()
 {
-    return iCardSettings ? iCardSettings->favoriteHash() : QString();
+    return iYubiKeySettings.favoriteHash();
 }
 
 void
 YubiKeyAuthListModel::Private::setYubiKeyId(
-    const QString aYubiKeyId)
+    const QString& aYubiKeyId)
 {
     if (iYubiKeyId != aYubiKeyId) {
         iYubiKeyId = aYubiKeyId;
         queueSignal(SignalYubiKeyIdChanged);
-        delete iCardSettings;
-        if (iYubiKeyId.isEmpty()) {
-            iCardSettings = Q_NULLPTR;
-        } else {
-            iCardSettings = new YubiKeyCardSettings(iYubiKeyId);
-
-            const QString favoriteHash(iCardSettings->favoriteHash());
+        iYubiKeySettings = YubiKeySettings(YubiKeyUtil::fromHex(aYubiKeyId));
+        if (!iYubiKeyId.isEmpty()) {
+            const QString favoriteHash(iYubiKeySettings.favoriteHash());
             QString realFavoriteName, favoritePassword;
             YubiKeyTokenType favoriteTokenType = YubiKeyTokenType_Unknown;
             bool favoriteExpired = false, favoriteMfR = false;
@@ -495,7 +493,7 @@ YubiKeyAuthListModel::Private::setYubiKeyId(
                     roles.append(ModelData::FavoriteRole);
                 }
 
-                if (iCardSettings->isSteamHash(entry->iSteamHash)) {
+                if (iYubiKeySettings.isSteamHash(entry->iSteamHash)) {
                     if (!entry->iSteam) {
                         entry->iSteam = true;
                         roles.append(ModelData::SteamRole);
@@ -546,8 +544,7 @@ YubiKeyAuthListModel::Private::setItems(
     for (int i = 0; i < n; i++) {
         ModelData* entry = iList.at(i);
 
-        entry->iSteam = iCardSettings &&
-            iCardSettings->isSteamHash(entry->iSteamHash);
+        entry->iSteam = iYubiKeySettings.isSteamHash(entry->iSteamHash);
         if (entry->iSteam) {
             steamHashes.append(entry->iSteamHash);
         }
@@ -588,12 +585,11 @@ YubiKeyAuthListModel::Private::setItems(
     if (hadExpiringTotpCodes != iHaveExpiringTotpCodes) {
         queueSignal(SignalHaveExpiringTotpCodesChanged);
     }
-    if (iCardSettings) {
-        steamHashes.sort();
-        iCardSettings->setSteamHashes(steamHashes);
-        if (realFavoriteName.isEmpty()) {
-            iCardSettings->clearFavorite();
-        }
+
+    steamHashes.sort();
+    iYubiKeySettings.setSteamHashes(steamHashes);
+    if (realFavoriteName.isEmpty()) {
+        iYubiKeySettings.clearFavorite();
     }
 }
 
@@ -619,7 +615,7 @@ YubiKeyAuthListModel::Private::setFavoriteMarkedForRefresh(
 
 void
 YubiKeyAuthListModel::Private::setFavoriteName(
-    const QString aName)
+    const QString& aName)
 {
     if (iFavoriteName != aName) {
         iFavoriteName = aName;
@@ -629,7 +625,7 @@ YubiKeyAuthListModel::Private::setFavoriteName(
 
 void
 YubiKeyAuthListModel::Private::setFavoritePassword(
-    const QString aPassword)
+    const QString& aPassword)
 {
     if (iFavoritePassword != aPassword) {
         iFavoritePassword = aPassword;
@@ -1032,9 +1028,7 @@ YubiKeyAuthListModel::tokenRenamed(
     // There is a refresh after each rename, the new (renamed) token will
     // be recognized as a favorite
     HDEBUG(aFrom << "=>" << aTo);
-    if (iPrivate->iCardSettings) {
-        iPrivate->iCardSettings->tokenRenamed(aFrom, aTo);
-    }
+    iPrivate->iYubiKeySettings.tokenRenamed(aFrom, aTo);
 }
 
 bool
@@ -1097,12 +1091,10 @@ YubiKeyAuthListModel::setData(
             if (data->iFavorite != b) {
                 roles.append(aRole);
                 data->iFavorite = b;
-                if (iPrivate->iCardSettings) {
-                    if (b) {
-                        iPrivate->iCardSettings->setFavoriteHash(data->iNameHash);
-                    } else {
-                        iPrivate->iCardSettings->clearFavorite();
-                    }
+                if (b) {
+                    iPrivate->iYubiKeySettings.setFavoriteHash(data->iNameHash);
+                } else {
+                    iPrivate->iYubiKeySettings.clearFavorite();
                 }
                 if (b) {
                     // There is only one favorite
@@ -1139,12 +1131,10 @@ YubiKeyAuthListModel::setData(
                 if (data->updatePassword()) {
                     roles.append(ModelData::PasswordRole);
                 }
-                if (iPrivate->iCardSettings) {
-                    if (b) {
-                        iPrivate->iCardSettings->addSteamHash(data->iSteamHash);
-                    } else {
-                        iPrivate->iCardSettings->removeSteamHash(data->iSteamHash);
-                    }
+                if (b) {
+                    iPrivate->iYubiKeySettings.addSteamHash(data->iSteamHash);
+                } else {
+                    iPrivate->iYubiKeySettings.removeSteamHash(data->iSteamHash);
                 }
             }
             ok = true;

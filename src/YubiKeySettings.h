@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
- * Copyright (C) 2022 Jolla Ltd.
+ * Copyright (C) 2023-2026 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -37,43 +36,49 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_AUTH_H
-#define _YUBIKEY_AUTH_H
+#ifndef _YUBIKEY_SETTINGS_H
+#define _YUBIKEY_SETTINGS_H
 
-#include "YubiKeyTypes.h"
-
-#include <QtCore/QByteArray>
 #include <QtCore/QObject>
+#include <QtCore/QStringList>
 
-class YubiKeyAuth :
+class YubiKeySettings :
     public QObject
 {
     Q_OBJECT
 
 public:
-    YubiKeyAuth(QByteArray);
-    YubiKeyAuth(const YubiKeyAuth&);
-    YubiKeyAuth();
-    ~YubiKeyAuth();
+    YubiKeySettings(QByteArray);
+    YubiKeySettings(const YubiKeySettings&);
+    YubiKeySettings();
+    ~YubiKeySettings();
 
-    YubiKeyAuth& operator = (const YubiKeyAuth&);
+    YubiKeySettings& operator = (const YubiKeySettings&);
 
     bool isValid() const;
-    QByteArray yubiKeyId() const;
-    QByteArray getAccessKey(YubiKeyAlgorithm) const;
-    bool setAccessKey(YubiKeyAlgorithm, QByteArray, bool);
-    bool setPassword(YubiKeyAlgorithm, QString, bool);
-    void clearPassword();
 
-    static QByteArray calculateAccessKey(QByteArray, YubiKeyAlgorithm, QString);
-    static QByteArray calculateResponse(QByteArray, QByteArray, YubiKeyAlgorithm);
+    QByteArray yubiKeyId() const;
+    QString favoriteHash() const;
+    void setFavoriteHash(QString);
+    bool isFavoriteName(QString) const;
+    void setFavoriteName(QString);
+    void clearFavorite();
+
+    QStringList steamHashes() const;
+    bool isSteamHash(QString) const;
+    void setSteamHashes(QStringList);
+    void addSteamHash(QString);
+    void removeSteamHash(QString);
+
+    void tokenRenamed(QString, QString);
 
 Q_SIGNALS:
-    void accessKeyChanged(YubiKeyAlgorithm);
+    void favoriteHashChanged();
+    void steamHashesChanged();
 
 private:
     class Private;
     Private* iPrivate;
 };
 
-#endif // _YUBIKEY_AUTH_H
+#endif // _YUBIKEY_SETTINGS_H

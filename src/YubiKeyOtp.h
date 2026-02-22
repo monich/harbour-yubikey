@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023-2026 Slava Monich <slava@monich.com>
+ * Copyright (C) 2026 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -36,50 +36,38 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_SETTINGS_H
-#define _YUBIKEY_SETTINGS_H
+#ifndef _YUBIKEY_OTP_H
+#define _YUBIKEY_OTP_H
 
-#include <QtCore/QByteArrayList>
-#include <QtCore/QObject>
+#include "YubiKeyTypes.h"
 
-class YubiKeySettings :
-    public QObject
+#include <QtCore/QByteArray>
+#include <QtCore/QDebug>
+
+// OTP code
+class YubiKeyOtp
 {
-    Q_OBJECT
-
 public:
-    YubiKeySettings(QByteArray);
-    YubiKeySettings(const YubiKeySettings&);
-    YubiKeySettings();
-    ~YubiKeySettings();
+    YubiKeyOtp();
+    YubiKeyOtp(QByteArray);
+    YubiKeyOtp(const YubiKeyOtp&);
 
-    YubiKeySettings& operator = (const YubiKeySettings&);
-
+    YubiKeyOtp& operator = (const YubiKeyOtp&);
+    bool operator == (const YubiKeyOtp&) const;
+    bool operator != (const YubiKeyOtp&) const;
+    bool equals(const YubiKeyOtp&) const;
     bool isValid() const;
 
-    QByteArray yubiKeyId() const;
-    QByteArray favoriteHash() const;
-    void setFavoriteHash(QByteArray);
-    bool isFavoriteHash(QByteArray) const;
-    bool isFavoriteName(QString) const;
-    void setFavoriteName(QString);
-    void clearFavorite();
-
-    QByteArrayList steamHashes() const;
-    bool isSteamHash(QByteArray) const;
-    void setSteamHashes(QByteArrayList);
-    void addSteamHash(QByteArray);
-    void removeSteamHash(QByteArray);
-
-    void tokenRenamed(QString, QString);
-
-Q_SIGNALS:
-    void favoriteHashChanged();
-    void steamHashesChanged();
-
-private:
-    class Private;
-    Private* iPrivate;
+public:
+    QByteArray iName;  // UTF-8
+    YubiKeyTokenType iType;
+    YubiKeyAlgorithm iAlg;
+    uint iDigits;
+    uint iMiniHash;
 };
 
-#endif // _YUBIKEY_SETTINGS_H
+QDebug operator<<(QDebug, const YubiKeyOtp&);
+
+Q_DECLARE_METATYPE(YubiKeyOtp)
+
+#endif // _YUBIKEY_OTP_H

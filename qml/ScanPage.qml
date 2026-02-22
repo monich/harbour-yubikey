@@ -154,13 +154,15 @@ Page {
         }
     }
 
-    HarbourFitLabel {
+    InfoLabel {
         id: titleLabel
 
-        x: Theme.horizontalPageMargin
-        width: parent.width - 2 * x
         height: isPortrait ? Theme.itemSizeLarge : Theme.itemSizeSmall
-        maxFontSize: isPortrait ? Theme.fontSizeExtraLarge : Theme.fontSizeLarge
+        font.pixelSize: isPortrait ? Theme.fontSizeExtraLarge : Theme.fontSizeLarge
+        minimumPixelSize: Theme.fontSizeSmall
+        fontSizeMode: Text.Fit
+        verticalAlignment: Text.AlignVCenter
+
         //: Page title (suggestion to scan QR code)
         //% "Scan QR code"
         text: qsTrId("yubikey-scan-title")

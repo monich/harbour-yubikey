@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023-2026 Slava Monich <slava@monich.com>
+ * Copyright (C) 2026 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -36,50 +36,53 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_SETTINGS_H
-#define _YUBIKEY_SETTINGS_H
+#ifndef _YUBIKEY_OP_TRACKER_H
+#define _YUBIKEY_OP_TRACKER_H
 
-#include <QtCore/QByteArrayList>
-#include <QtCore/QObject>
+#include "YubiKeyOp.h"
 
-class YubiKeySettings :
+class YubiKeyOpTracker :
     public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(YubiKeyOp* op READ op WRITE setOp NOTIFY opChanged)
+    Q_PROPERTY(int opId READ opId NOTIFY opIdChanged)
+    Q_PROPERTY(int opResultCode READ opResultCode NOTIFY opResultCodeChanged)
+    Q_PROPERTY(State state READ state NOTIFY stateChanged)
+    Q_ENUMS(State)
 
 public:
-    YubiKeySettings(QByteArray);
-    YubiKeySettings(const YubiKeySettings&);
-    YubiKeySettings();
-    ~YubiKeySettings();
+    YubiKeyOpTracker(QObject* aParent = Q_NULLPTR);
 
-    YubiKeySettings& operator = (const YubiKeySettings&);
+    enum State {
+        None,
+        Queued,
+        Active,
+        Cancelled,
+        Finished,
+        Failed
+    };
 
-    bool isValid() const;
+    YubiKeyOp* op() const;
+    void setOp(YubiKeyOp*);
 
-    QByteArray yubiKeyId() const;
-    QByteArray favoriteHash() const;
-    void setFavoriteHash(QByteArray);
-    bool isFavoriteHash(QByteArray) const;
-    bool isFavoriteName(QString) const;
-    void setFavoriteName(QString);
-    void clearFavorite();
+    State state() const;
+    int opId() const;
+    int opResultCode() const;
 
-    QByteArrayList steamHashes() const;
-    bool isSteamHash(QByteArray) const;
-    void setSteamHashes(QByteArrayList);
-    void addSteamHash(QByteArray);
-    void removeSteamHash(QByteArray);
-
-    void tokenRenamed(QString, QString);
+    Q_INVOKABLE void cancelOp();
 
 Q_SIGNALS:
-    void favoriteHashChanged();
-    void steamHashesChanged();
+    void opChanged();
+    void opIdChanged();
+    void opResultCodeChanged();
+    void stateChanged();
 
 private:
     class Private;
     Private* iPrivate;
 };
 
-#endif // _YUBIKEY_SETTINGS_H
+Q_DECLARE_METATYPE(YubiKeyOpTracker::State)
+
+#endif // _YUBIKEY_OP_TRACKER_H

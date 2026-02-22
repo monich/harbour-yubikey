@@ -23,16 +23,6 @@
         <extracomment>Pop-up notification</extracomment>
         <translation>Lösenord kopierat till urklipp</translation>
     </message>
-    <message id="yubikey-notification-put_error">
-        <source>Failed to add %1 (%2)</source>
-        <extracomment>Pop-up notification (%1 if the token label, %2 is the error message/code)</extracomment>
-        <translation type="unfinished">Misslyckades med att lägga till %1 (%2)</translation>
-    </message>
-    <message id="yubikey-error-no_space">
-        <source>No space</source>
-        <extracomment>Error message (No space)</extracomment>
-        <translation type="unfinished">Inget utrymme</translation>
-    </message>
     <message id="yubikey-menu-add_token">
         <source>Add token</source>
         <extracomment>Pulley menu item</extracomment>
@@ -103,6 +93,16 @@
         <extracomment>Context menu item</extracomment>
         <translation type="unfinished">Steam-token</translation>
     </message>
+    <message id="yubikey-menu-delete_remorse">
+        <source>Deleting</source>
+        <extracomment>Remorse popup text</extracomment>
+        <translation type="unfinished">Tar bort</translation>
+    </message>
+    <message id="yubikey-remorse-clearing_password">
+        <source>Clearing YubiKey password</source>
+        <extracomment>Remorse popup text</extracomment>
+        <translation type="unfinished">Rensa YubiKey-lösenordet</translation>
+    </message>
     <message id="yubikey-status-waiting_to_reset">
         <source>Touch the same YubiKey to reset it</source>
         <extracomment>Status label</extracomment>
@@ -112,6 +112,11 @@
         <source>Touch the same YubiKey to validate the password</source>
         <extracomment>Status label</extracomment>
         <translation>Håll telefonen mot samma YubiKey för att validera lösenordet</translation>
+    </message>
+    <message id="yubikey-status-validating_password">
+        <source>Validating the password</source>
+        <extracomment>Status label</extracomment>
+        <translation type="unfinished">Validerar lösenordet</translation>
     </message>
     <message id="yubikey-info-nfc_not_supported">
         <source>NFC not supported</source>
@@ -128,15 +133,15 @@
         <extracomment>Hint label</extracomment>
         <translation>Håll telefonen mot en YubiKey NFC</translation>
     </message>
-    <message id="yubikey-info-version">
-        <source>Version: %1</source>
-        <extracomment>Card info label</extracomment>
-        <translation>Version: %1</translation>
-    </message>
     <message id="yubikey-info-serial">
         <source>Serial: %1</source>
         <extracomment>Card info label</extracomment>
         <translation>Serienummer: %1</translation>
+    </message>
+    <message id="yubikey-info-firmware">
+        <source>Firmware: %1</source>
+        <extracomment>Card info label</extracomment>
+        <translation type="unfinished">Inbyggd programvara: %1</translation>
     </message>
     <message id="yubikey-info-no_creds">
         <source>No credentials are stored on this YubiKey</source>
@@ -159,14 +164,9 @@
         <translation>Ange nytt lösenord för denna YubiKey</translation>
     </message>
     <message id="yubikey-info-enter_password-set_prompt">
-        <source>Enter password to set for this YubiKey</source>
+        <source>Enter password for this YubiKey</source>
         <extracomment>Input prompt (there was no password, creating one)</extracomment>
-        <translation>Ange ett lösenord för denna YubiKey</translation>
-    </message>
-    <message id="yubikey-button-enter_password">
-        <source>Enter</source>
-        <extracomment>Button label</extracomment>
-        <translation>Tillämpa</translation>
+        <translation type="unfinished">Ange ett lösenord för denna YubiKey</translation>
     </message>
     <message id="yubikey-confirm_password-description">
         <source>Make sure you don&apos;t forget your password. It&apos;s impossible to either recover it or to access the tokens stored on YubiKey without knowing it. You will still be able to reset your YubiKey though, and start from scratch.</source>
@@ -177,16 +177,6 @@
         <source>New password again</source>
         <extracomment>Placeholder for the password confirmation prompt</extracomment>
         <translation>Nytt lösenord igen</translation>
-    </message>
-    <message id="yubikey-confirm_password-label">
-        <source>New password</source>
-        <extracomment>Label for the password confirmation prompt</extracomment>
-        <translation>Nytt lösenord</translation>
-    </message>
-    <message id="yubikey-confirm_password-button">
-        <source>Confirm</source>
-        <extracomment>Button label (confirm password)</extracomment>
-        <translation>Bekräfta</translation>
     </message>
     <message id="yubikey-wait-change_password">
         <source>Touch the same YubiKey to change the password</source>
@@ -204,14 +194,19 @@
         <translation>Håll telefonen mot samma YubiKey för att ta bort lösenordet</translation>
     </message>
     <message id="yubikey-wait-put_token">
-        <source>Touch YubiKey to save the token</source>
+        <source>Touch the same YubiKey to save the token</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot YubiKey för att spara token</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att spara token</translation>
     </message>
     <message id="yubikey-wait-put_selected_tokens">
-        <source>Touch YubiKey to save the selected tokens</source>
+        <source>Touch the same YubiKey to save the selected tokens</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot YubiKey för att spara de valda tokens</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att spara de valda tokens</translation>
+    </message>
+    <message id="yubikey-wait-saving_tokens">
+        <source>Saving the tokens...</source>
+        <extracomment>Status label</extracomment>
+        <translation type="unfinished">Håller på att spara tokens...</translation>
     </message>
     <message id="yubikey-add_token-save">
         <source>Save</source>
@@ -285,7 +280,7 @@
     </message>
     <message id="yubikey-remember_password-description">
         <source>The password is stored in a hashed form from which the original password cannot be recovered. However, this hashed form can still be copied and used for accessing your key even without knowing the original password. By choosing to store the password, you accept that risk.</source>
-        <extracomment>Switch label</extracomment>
+        <extracomment>Switch description</extracomment>
         <translation>Lösenordet lagras i hashad form från vilken det ursprungliga lösenordet inte kan återställas. Denna hashberäkning kan dock fortfarande kopieras och användas för att komma åt din nyckel även utan att känna till det ursprungliga lösenordet. Genom att lagra lösenordet accepterar du den risken.</translation>
     </message>
     <message id="yubikey-confirm_password-prompt-change">
@@ -298,25 +293,15 @@
         <extracomment>Input prompt</extracomment>
         <translation>Skriv in ditt YubiKey-lösenord en gång till</translation>
     </message>
-    <message id="yubikey-enter_password-placeholder">
-        <source>New password</source>
-        <extracomment>Placeholder for the new password field</extracomment>
-        <translation>Nytt lösenord</translation>
+    <message id="yubikey-confirm_password-match-label">
+        <source>Passwords match</source>
+        <extracomment>Label for the password confirmation prompt</extracomment>
+        <translation type="unfinished">Lösenorden matchar</translation>
     </message>
-    <message id="yubikey-enter_password-label">
-        <source>New password</source>
-        <extracomment>Label for the new password field</extracomment>
-        <translation>Nytt lösenord</translation>
-    </message>
-    <message id="yubikey-enter_password-button">
-        <source>Enter</source>
-        <extracomment>Button label (enter new password)</extracomment>
-        <translation>Tillämpa</translation>
-    </message>
-    <message id="yubikey-item-touch_to_delete">
-        <source>Touch YubiKey to delete this token</source>
-        <extracomment>List item text</extracomment>
-        <translation>Håll telefonen mot YubiKey för att ta bort denna token</translation>
+    <message id="yubikey-confirm_password-mismatch-label">
+        <source>Passwords don&apos;t match</source>
+        <extracomment>Label for the password confirmation prompt</extracomment>
+        <translation type="unfinished">Lösenorden matchar inte</translation>
     </message>
     <message id="yubikey-scan-title">
         <source>Scan QR code</source>
@@ -348,30 +333,100 @@
         <extracomment>Dialog title</extracomment>
         <translation>Välj token</translation>
     </message>
+    <message id="yubikey-confirm_password-back-button">
+        <source>Back</source>
+        <extracomment>Button label (confirm password)</extracomment>
+        <translation>Tillbaka</translation>
+    </message>
+    <message id="yubikey-confirm_password-accept-button">
+        <source>Confirm</source>
+        <extracomment>Button label (confirm password)</extracomment>
+        <translation>Bekräfta</translation>
+    </message>
+    <message id="yubikey-rename_token-accept-button">
+        <source>Rename</source>
+        <extracomment>Button label (rename token)</extracomment>
+        <translation type="unfinished">Byt namn</translation>
+    </message>
     <message id="yubikey-rename_token-prompt">
-        <source>Enter new name for %1</source>
+        <source>Enter a new name</source>
         <extracomment>Input prompt to rename the token</extracomment>
-        <translation>Ange ett nytt namn för %1</translation>
+        <translation type="unfinished">Ange ett nytt namn</translation>
     </message>
     <message id="yubikey-rename_token-placeholder">
-        <source>Enter new name</source>
+        <source>New name</source>
         <extracomment>Placeholder for the new token name</extracomment>
-        <translation>Ange nytt namn</translation>
+        <translation type="unfinished">Nytt namn</translation>
     </message>
     <message id="yubikey-rename_token-duplicate_name">
         <source>Duplicate name</source>
         <extracomment>Label for a duplicate token name</extracomment>
         <translation>Dubblettnamn</translation>
     </message>
-    <message id="yubikey-rename_token-button">
-        <source>Rename</source>
-        <extracomment>Button label (rename token)</extracomment>
-        <translation>Byt namn</translation>
+    <message id="yubikey-not_activated-info_label_1">
+        <source>Connect your YubiKey to any USB power source, such as a computer, for at least 3 seconds.</source>
+        <extracomment>Info label</extracomment>
+        <translation type="unfinished">Anslut din YubiKey till en USB-strömkälla, t.ex. en dator, i minst 3 sekunder.</translation>
     </message>
-    <message id="yubikey-wait-rename_token">
-        <source>Touch the same YubiKey to rename the token</source>
-        <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot samma YubiKey för att byta namn på token</translation>
+    <message id="yubikey-not_activated-info_label_2">
+        <source>Once powered, NFC will be activated and ready for use.</source>
+        <extracomment>Info label</extracomment>
+        <translation type="unfinished">När den är strömförsörjd aktiveras NFC och är klar att användas.</translation>
+    </message>
+    <message id="yubikey-error-no_space">
+        <source>No space left</source>
+        <extracomment>Error message (No space left on YubiKey)</extracomment>
+        <translation type="unfinished">Inget mer utrymme</translation>
+    </message>
+    <message id="yubikey-popup-wrong_touch">
+        <source>Wrong YubiKey</source>
+        <extracomment>Wait page popup (the touched YubiKey is not the one we are waiting for)</extracomment>
+        <translation type="unfinished">Fel YubiKey</translation>
+    </message>
+    <message id="yubikey-popup-clear_password_success">
+        <source>YubiKey password has been removed</source>
+        <extracomment>Pop-up notification</extracomment>
+        <translation type="unfinished">YubiKey-lösenordet har tagits bort</translation>
+    </message>
+    <message id="yubikey-popup-change_password_success">
+        <source>YubiKey password has been changed</source>
+        <extracomment>Pop-up notification</extracomment>
+        <translation type="unfinished">YubiKey-lösenordet har ändrats</translation>
+    </message>
+    <message id="yubikey-popup-set_password_success">
+        <source>YubiKey has been password protected</source>
+        <extracomment>Pop-up notification</extracomment>
+        <translation type="unfinished">YubiKey har lösenordsskyddats</translation>
+    </message>
+    <message id="yubikey-popup-put_token_success">
+        <source>Saved %1</source>
+        <extracomment>Pop-up notification (%1 is the token label)</extracomment>
+        <translation type="unfinished">Sparade %1</translation>
+    </message>
+    <message id="yubikey-popup-put_token_error">
+        <source>Failed to save %1 (%2)</source>
+        <extracomment>Pop-up notification (%1 is the token label, %2 is the error message/code)</extracomment>
+        <translation type="unfinished">Misslyckades med att spara %1 (%2)</translation>
+    </message>
+    <message id="yubikey-popup-put_tokens_success">
+        <source>Tokens saved</source>
+        <extracomment>Pop-up notification</extracomment>
+        <translation type="unfinished">Tokens har sparats</translation>
+    </message>
+    <message id="yubikey-popup-put_tokens_error">
+        <source>Failed to save one or more tokens (%1)</source>
+        <extracomment>Pop-up notification (%1 is the error message/code)</extracomment>
+        <translation type="unfinished">Misslyckades med att spara en eller flera tokens (%1)</translation>
+    </message>
+    <message id="yubikey-item-touch_to_delete">
+        <source>Touch YubiKey to delete this token</source>
+        <extracomment>List item text</extracomment>
+        <translation>Håll telefonen mot YubiKey för att ta bort denna token</translation>
+    </message>
+    <message id="yubikey-item-touch_to_rename">
+        <source>Touch YubiKey to rename this token</source>
+        <extracomment>List item text</extracomment>
+        <translation type="unfinished">Håll telefonen mot YubiKey för att byta namn på den denna token</translation>
     </message>
 </context>
 </TS>

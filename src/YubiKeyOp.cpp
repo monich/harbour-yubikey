@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023-2026 Slava Monich <slava@monich.com>
+ * Copyright (C) 2026 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -36,50 +36,30 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_SETTINGS_H
-#define _YUBIKEY_SETTINGS_H
+#include "YubiKeyOp.h"
 
-#include <QtCore/QByteArrayList>
-#include <QtCore/QObject>
+YubiKeyOp::YubiKeyOp(
+    QObject* aParent) :
+    QObject(aParent)
+{}
 
-class YubiKeySettings :
-    public QObject
+YubiKeyOp::OpData::OpData()
+{}
+
+YubiKeyOp::OpData::~OpData()
+{}
+
+bool
+YubiKeyOp::isDone() const
 {
-    Q_OBJECT
-
-public:
-    YubiKeySettings(QByteArray);
-    YubiKeySettings(const YubiKeySettings&);
-    YubiKeySettings();
-    ~YubiKeySettings();
-
-    YubiKeySettings& operator = (const YubiKeySettings&);
-
-    bool isValid() const;
-
-    QByteArray yubiKeyId() const;
-    QByteArray favoriteHash() const;
-    void setFavoriteHash(QByteArray);
-    bool isFavoriteHash(QByteArray) const;
-    bool isFavoriteName(QString) const;
-    void setFavoriteName(QString);
-    void clearFavorite();
-
-    QByteArrayList steamHashes() const;
-    bool isSteamHash(QByteArray) const;
-    void setSteamHashes(QByteArrayList);
-    void addSteamHash(QByteArray);
-    void removeSteamHash(QByteArray);
-
-    void tokenRenamed(QString, QString);
-
-Q_SIGNALS:
-    void favoriteHashChanged();
-    void steamHashesChanged();
-
-private:
-    class Private;
-    Private* iPrivate;
-};
-
-#endif // _YUBIKEY_SETTINGS_H
+    switch (opState()) {
+    case OpQueued:
+    case OpActive:
+        break;
+    case OpCancelled:
+    case OpFinished:
+    case OpFailed:
+        return true;
+    }
+    return false;
+}

@@ -5,14 +5,43 @@ DockedPanel {
     id: thisItem
 
     property alias text: label.text
+    property alias iconSource: icon.source
+    property alias minDisplayInterval: minDisplayIntervalTimer.interval
+    property bool isPortrait: true
+    property bool autoHide: true
 
-    width: parent.width
+    width: isPortrait ? parent.width : Math.ceil(2 * parent.width / 3)
+    anchors.horizontalCenter: parent.horizontalCenter
     height: content.height + _padding
-    dock: Dock.Bottom
+    animationDuration: 250
+    dock: Dock.Top
     background: null
     modal: true
 
+    readonly property bool _fullyOpen: open && !moving
     readonly property int _padding: Theme.paddingMedium
+
+    onAutoHideChanged: {
+        if (autoHide) {
+            if (_fullyOpen && !minDisplayIntervalTimer.running) {
+                hide(false)
+            }
+        } else {
+            minDisplayIntervalTimer.stop()
+        }
+    }
+
+    on_FullyOpenChanged: {
+        if (_fullyOpen) {
+            minDisplayIntervalTimer.restart()
+        }
+    }
+
+    onOpenChanged: {
+        if (!open) {
+            minDisplayIntervalTimer.stop()
+        }
+    }
 
     Rectangle {
         id: content
@@ -37,7 +66,7 @@ DockedPanel {
 
             x: Theme.horizontalPageMargin
             y: Theme.paddingLarge
-            source: "images/yubikey-error.svg"
+            source: "images/yubikey-ok.svg"
             sourceSize.height: Theme.iconSizeLarge
         }
 
@@ -52,8 +81,19 @@ DockedPanel {
                 rightMargin: Theme.horizontalPageMargin
             }
             textFormat: Text.PlainText
-            wrapMode: Text.WrapAnywhere
+            wrapMode: Text.WordWrap
             color: Theme.highlightColor
+        }
+    }
+
+    Timer {
+        id: minDisplayIntervalTimer
+
+        interval: 2000
+        onTriggered: {
+            if (autoHide) {
+                hide(false)
+            }
         }
     }
 }

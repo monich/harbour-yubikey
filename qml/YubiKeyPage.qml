@@ -8,123 +8,280 @@ import "harbour"
 Page {
     id: thisPage
 
+    property var yubiKey
+    property string yubiKeyId
+    property string yubiKeySerial
+    property string yubiKeyFirmware
+
+    readonly property bool yubiKeyPresent: yubiKey.present
+    readonly property int totpTimeLeft: yubiKey.totpTimeLeft
+    readonly property string favoriteName: otpListModel.favoriteName
+    readonly property int favoriteTokenType: otpListModel.favoriteTokenType
+    readonly property string favoritePassword: otpListModel.favoritePassword
+    readonly property bool favoriteMarkedForRefresh: otpListModel.favoriteMarkedForRefresh
+
     showNavigationIndicator: false
 
-    property alias yubiKeyId: yubiKey.yubiKeyId
-    property alias yubiKeyPresent: yubiKey.present
-    property alias totpTimeLeft: yubiKey.totpTimeLeft
-    property alias favoriteName: otpListModel.favoriteName
-    property alias favoriteTokenType: otpListModel.favoriteTokenType
-    property alias favoritePassword: otpListModel.favoritePassword
-    property alias favoriteMarkedForRefresh: otpListModel.favoriteMarkedForRefresh
-    readonly property bool yubiKeyAccessDenied: yubiKey.authAccess === YubiKeyCard.AccessDenied
-
-    property bool _invalidPassword
+    property bool _resetPopupShown
     readonly property int _fullHeight: isPortrait ? Screen.height : Screen.width
-    readonly property bool _authorized: yubiKey.authAccess === YubiKeyCard.AccessOpen ||
-        yubiKey.authAccess === YubiKeyCard.AccessGranted
-
-    signal replacePage(var cardId)
-    signal yubiKeyReset()
-
-    property bool _replaced
-
-    onStatusChanged: {
-        if (status === PageStatus.Active) {
-            backNavigation = Qt.binding(function() { return !NfcAdapter.targetPresent })
-            showNavigationIndicator = true
-        }
-    }
+    readonly property bool _authorized: yubiKey.authAccess === YubiKey.AccessOpen ||
+        yubiKey.authAccess === YubiKey.AccessGranted
 
     // Otherwise width is changing with a delay, causing visible layout changes
     onIsLandscapeChanged: width = isLandscape ? Screen.height : Screen.width
 
-    function replace() {
-        if (!_replaced) {
-            _replaced = true
-            replacePage(yubiKeyId)
+    onStatusChanged: {
+        if (status === PageStatus.Active) {
+            backNavigation = Qt.binding(function() { return !yubiKeyPresent})
+            showNavigationIndicator = true
+            if (yubiKey.haveBeenReset && !_resetPopupShown) {
+                _resetPopupShown = true
+                //: Pop-up notification
+                //% "YubiKey has been reset"
+                _showSuccessPopup(qsTrId("yubikey-notification-reset"))
+            }
         }
     }
 
-    function renameToken(tokenName) {
-        var renamePage = pageStack.push("YubiKeyRenameTokenPage.qml", {
-            "tokenList": otpListModel,
-            "allowedOrientations": allowedOrientations,
-            "currentName":  tokenName
-        })
-        renamePage.rename.connect(function(name) {
-            renamePage.forwardNavigation = true
-            if (yubiKey.renameToken(tokenName, name)) {
-                replace()
-            } else {
-                pageStack.push(waitPageComponent, {
+    function isOk() {
+        return yubiKey.yubiKeyId === yubiKeyId &&
+            yubiKey.authAccess !== YubiKey.AccessNotActivated &&
+            yubiKey.authAccess !== YubiKey.AccessDenied
+    }
+
+    function _returnToYubiKeyPage() {
+        returnToYubiKeyPageRequest.schedule()
+    }
+
+    function _showSuccessPopup(text) {
+        popupPanel.iconSource = "images/yubikey-ok.svg"
+        popupPanel.text = text
+        popupPanel.show(false)
+    }
+
+    function _showQuestionPopup(text) {
+        popupPanel.iconSource = "images/yubikey-question.svg"
+        popupPanel.text = text
+        popupPanel.show(false)
+    }
+
+    function _showErrorPopup(text) {
+        popupPanel.iconSource = "images/yubikey-error.svg"
+        popupPanel.text = text
+        popupPanel.show(false)
+    }
+
+    function _resetYubiKey() {
+        pageStack.push("WarningDialog.qml", {
+            //: Warning text
+            //% "Resetting the YubiKey irreversibly removes all secrets stored in it. This action cannot be undone. Are you sure that you really want to do it?"
+            "text": qsTrId("yubikey-warning-reset_text"),
+            "allowedOrientations": thisPage.allowedOrientations,
+            "acceptDestinationAction": PageStackAction.Replace,
+            "acceptDestination": waitOpPageComponent,
+            "acceptDestinationProperties": {
+                //: Status label
+                //% "Touch the same YubiKey to reset it"
+                "text": qsTrId("yubikey-status-waiting_to_reset")
+            }
+        }).accepted.connect(function() {
+            // There's no need to do anything when the operation is finished.
+            // If reset succeeds, the YubiKey ID will change and YubiKeyPage
+            // will get replaced with the new instance. Let's hope that it works)
+            var op = yubiKey.reset()
+            if (!yubiKeyPresent) {
+                pageStack.replaceAbove(thisPage, waitOpPageComponent, {
                     //: Status label
-                    //% "Touch the same YubiKey to rename the token"
-                    "text":  qsTrId("yubikey-wait-rename_token"),
-                    "complete": function(page,keyState,waitId,success) {
-                        if (!waitId || !success) {
-                            page.waitForId(yubiKey.renameToken(tokenName, name))
-                        } else {
-                            page.tryAgain()
-                        }
-                    }
-                }).waitDone.connect(replace)
+                    //% "Touch the same YubiKey to reset it"
+                    "text": qsTrId("yubikey-status-waiting_to_reset"),
+                    "op": op})
             }
         })
     }
 
-    YubiKeyCard {
-        id: yubiKey
+    function _clearPasswordAfterTouch()
+    {
+        var op = yubiKey.clearPassword()
+        pageStack.push(waitOpPageComponent, {
+            //: Status label
+            //% "Touch the same YubiKey to clear the password"
+            "text":  qsTrId("yubikey-wait-clear_password"),
+            "op": op
+        }).opFinished.connect(_returnToYubiKeyPage)
+        op.opFinished.connect(function (result) {
+            if (result === YubiKey.Success) {
+                //: Pop-up notification
+                //% "YubiKey password has been removed"
+                _showSuccessPopup(qsTrId("yubikey-popup-clear_password_success"))
+            }
+        })
+    }
 
-        readonly property bool canPerformPendingOperations: present &&
-            yubiKeyState === YubiKeyCard.YubiKeyStateReady &&
-            thisPage.status === PageStatus.Active
+    function _clearPassword()
+    {
+        if (yubiKeyPresent) {
+            var remorsePopup = remorsePopupComponent.createObject(thisPage)
+            remorsePopup.canceled.connect(remorsePopup.destroy)
+            remorsePopup.triggered.connect(function() {
+                if (yubiKeyPresent) {
+                    yubiKey.clearPassword().opFinished.connect(function (result) {
+                        if (result === YubiKey.Success) {
+                            //: Pop-up notification
+                            //% "YubiKey password has been removed"
+                            _showSuccessPopup(qsTrId("yubikey-popup-clear_password_success"))
+                        }
+                    })
+                } else {
+                    _clearPasswordAfterTouch()
+                }
+                remorsePopup.destroy()
+            })
+            //: Remorse popup text
+            //% "Clearing YubiKey password"
+            remorsePopup.execute(qsTrId("yubikey-remorse-clearing_password"));
+        } else {
+            _clearPasswordAfterTouch()
+        }
+    }
 
-        onCanPerformPendingOperationsChanged: {
-            if (canPerformPendingOperations) {
-                deleteTokens(otpListModel.markedForDeletion)
-                refreshTokens(otpListModel.markedForRefresh)
+    function _setPassword(enterPrompt, confirmPrompt, touchPrompt, successMsg)
+    {
+        pageStack.push("YubiKeyEnterPasswordDialog.qml", {
+            "allowedOrientations": allowedOrientations,
+            "enterPrompt": enterPrompt,
+            "confirmPrompt": confirmPrompt,
+            "destinationAction": yubiKeyPresent  ? PageStackAction.Pop : PageStackAction.Push,
+            "destination": yubiKeyPresent ? thisPage : waitOpPageComponent,
+            "destinationProperties": yubiKeyPresent ? {} : { "text": touchPrompt }
+        }).passwordAccepted.connect(function(dialog) {
+            var op = yubiKey.setPassword(dialog.password)
+
+            // if the destination page has the 'op' property, assume that
+            // it's an instance of YubiKeyWaitOpPage
+            var dest = dialog.acceptDestinationInstance
+            if (dest && 'op' in dest) {
+                dest.op = op
+                dest.opFinished.connect(_returnToYubiKeyPage)
             }
+
+            op.opFinished.connect(function (result) {
+                if (result === YubiKey.Success) {
+                    _showSuccessPopup(successMsg)
+                }
+            })
+        })
+    }
+
+    function _createPassword()
+    {
+            //: Input prompt (there was no password, creating one)
+            //% "Enter password for this YubiKey"
+        _setPassword(qsTrId("yubikey-info-enter_password-set_prompt"),
+            //: Input prompt
+            //% "Please type in your YubiKey password one more time"
+            qsTrId("yubikey-confirm_password-prompt-set"),
+            //: Status label
+            //% "Touch the same YubiKey to set the password"
+            qsTrId("yubikey-wait-set_password"),
+            //: Pop-up notification
+            //% "YubiKey has been password protected"
+            qsTrId("yubikey-popup-set_password_success"))
+    }
+
+    function _changePassword()
+    {
+            //: Input prompt (existing password is being replaced with a new one)
+            //% "Enter new password for this YubiKey"
+        _setPassword(qsTrId("yubikey-info-enter_password-change_prompt"),
+            //: Input prompt
+            //% "Please type in your new YubiKey password one more time"
+            qsTrId("yubikey-confirm_password-prompt-change"),
+            //: Status label
+            //% "Touch the same YubiKey to change the password"
+            qsTrId("yubikey-wait-change_password"),
+            //: Pop-up notification
+            //% "YubiKey password has been changed"
+            qsTrId("yubikey-popup-change_password_success"))
+    }
+
+    function _errorText(code) {
+        switch (code) {
+        case YubiKey.Success:
+            return "OK" // Not really being used, no need to localize
+        case YubiKey.ErrorNoSpace:
+            //: Error message (No space left on YubiKey)
+            //% "No space left"
+            return qsTrId("yubikey-error-no_space")
         }
-        onPasswordChanged: {
-            // Check if a transition is already ongoing
-            if (thisPage.status === PageStatus.Active ||
-                thisPage.status === PageStatus.Inactive) {
-                thisPage.replace()
+        return code.toString(16)
+    }
+
+    function _putToken(props) {
+        pageStack.push(editTokenDialogComponent, props).tokenAccepted.connect(function(dialog) {
+            var label = dialog.label
+            var op = yubiKey.putToken(dialog.type, dialog.algorithm, label,
+                dialog.secret, dialog.digits, dialog.counter || 0)
+
+            // if the destination page has the 'op' property, assume that
+            // it's an instance of YubiKeyWaitOpPage
+            var dest = dialog.acceptDestinationInstance
+            if (dest && 'op' in dest) {
+                dest.op = op
+                dest.opFinished.connect(_returnToYubiKeyPage)
             }
+
+            op.opFinished.connect(function (result) {
+                if (result === YubiKey.Success) {
+                    //: Pop-up notification (%1 is the token label)
+                    //% "Saved %1"
+                    _showSuccessPopup(qsTrId("yubikey-popup-put_token_success").arg(label))
+                } else {
+                    //: Pop-up notification (%1 is the token label, %2 is the error message/code)
+                    //% "Failed to save %1 (%2)"
+                    _showErrorPopup(qsTrId("yubikey-popup-put_token_error").arg(label).arg(_errorText(result)))
+                }
+            })
+        })
+    }
+
+    function _putTokens(model) {
+        var dialog = pageStack.push("YubiKeyImportDialog.qml", {
+            "allowedOrientations": allowedOrientations,
+            "model": model,
+            "acceptDestinationAction": PageStackAction.Push,
+            "acceptDestination": putTokensPageComponent
+        })
+        dialog.accepted.connect(function() {
+            var dest = dialog.acceptDestinationInstance
+            dest.opsFinished.connect(function(result) {
+                if (result === YubiKey.Success) {
+                    //: Pop-up notification
+                    //% "Tokens saved"
+                    _showSuccessPopup(qsTrId("yubikey-popup-put_tokens_success"))
+                } else {
+                    //: Pop-up notification (%1 is the error message/code)
+                    //% "Failed to save one or more tokens (%1)"
+                    _showErrorPopup(qsTrId("yubikey-popup-put_tokens_error").arg(_errorText(result)))
+                }
+                _returnToYubiKeyPage()
+            })
+            dest.opIds = yubiKey.putTokens(model.selectedTokens)
+        })
+    }
+
+    Connections {
+        target: thisPage.yubiKey
+        onInvalidYubiKeyConnected: {
+            //: Wait page popup (the touched YubiKey is not the one we are waiting for)
+            //% "Wrong YubiKey"
+            _showQuestionPopup(qsTrId("yubikey-popup-wrong_touch"))
         }
-        onPasswordRemoved: {
-            // Check if a transition is already ongoing
-            if (thisPage.status === PageStatus.Active ||
-                thisPage.status === PageStatus.Inactive) {
-                thisPage.replace()
-            }
-        }
-        onAccessKeyNotAccepted: {
-            // Don't do anything if the page is being deactivated
-            if (thisPage.status !== PageStatus.Deactivating) {
-                _invalidPassword = true
-            }
-        }
-        onYubiKeyReset: thisPage.yubiKeyReset()
-        onTotpCodesExpired: otpListModel.totpCodesExpired()
-        onTokenRenamed: otpListModel.tokenRenamed(from, to)
-        onPresentChanged: {
-            if (present) {
-                errorPopup.hide(false)
-            }
-        }
-        onPutFailed: {
-            var err = (errorCode === YubiKeyUtil.ErrorNoSpace) ?
-                //: Error message (No space)
-                //% "No space"
-                qsTrId("yubikey-error-no_space") :
-                errorCode.toString(16)
-            //: Pop-up notification (%1 if the token label, %2 is the error message/code)
-            //% "Failed to add %1 (%2)"
-            errorPopup.text = qsTrId("yubikey-notification-put_error").arg(token.label).arg(err)
-            errorPopup.show(false)
-        }
+    }
+
+    PageTransitionRequest {
+        id: returnToYubiKeyPageRequest
+
+        onExecute: pageStack.pop(thisPage)
     }
 
     Buzz {
@@ -146,59 +303,56 @@ Page {
     }
 
     Component {
-        id: warningDialogComponent
+        id: remorsePopupComponent
 
-        WarningDialog {
+        RemorsePopup { }
+    }
+
+    Component {
+        id: editTokenDialogComponent
+
+        YubiKeyEditTokenDialog {
             allowedOrientations: thisPage.allowedOrientations
-            //: Warning dialog title
-            //% "Warning"
-            title: qsTrId("yubikey-warning-title")
+            acceptDestinationAction: yubiKeyPresent  ? PageStackAction.Pop : PageStackAction.Push
+            acceptDestination: yubiKeyPresent ? thisPage : waitOpPageComponent
+            //: Status label
+            //% "Touch the same YubiKey to save the token"
+            acceptDestinationProperties: { "text":  qsTrId("yubikey-wait-put_token") }
         }
     }
 
     Component {
-        id: waitPageComponent
+        id: waitOpPageComponent
 
-        YubiKeyWaitPage {
+        YubiKeyWaitOpPage {
+            id: waitOpPage
+
             allowedOrientations: thisPage.allowedOrientations
-            yubiKeyId: thisPage.yubiKeyId
-        }
-    }
+            yubiKeyPresent: thisPage.yubiKeyPresent
 
-    Component {
-        id: addTokenDialogComponent
-
-        YubiKeyTokenDialog {
-            allowedOrientations: thisPage.allowedOrientations
-            yubiKeyId: thisPage.yubiKeyId
-            //: Dialog title
-            //% "Add token"
-            dialogTitle: qsTrId("yubikey-add_token-title")
-            //: Dialog button
-            //% "Save"
-            acceptText: qsTrId("yubikey-add_token-save")
-            acceptDestinationAction: PageStackAction.Push
-            acceptDestination: waitPageComponent
-            acceptDestinationProperties: {
-                "destinationPage": thisPage,
-                //: Status label
-                //% "Touch YubiKey to save the token"
-                "text":  qsTrId("yubikey-wait-put_token"),
-                "complete": function(page,keyState,waitId,success) {
-                    if (keyState === YubiKeyCard.YubiKeyStateReady) {
-                        if (success) {
-                            pageStack.pop(thisPage)
-                        } else {
-                            var dialog = pageStack.previousPage(page)
-                            page.waitForId(yubiKey.putToken(dialog.type,
-                                dialog.algorithm, dialog.label, dialog.secret,
-                                dialog.digits, dialog.counter ? dialog.counter : 0))
-                        }
-                    } else {
-                        page.tryAgain()
-                    }
-                }
+            Connections {
+                target: thisPage.yubiKey
+                onInvalidYubiKeyConnected: waitOpPage.invalidYubiKeyConnected()
             }
+        }
+    }
+
+    Component {
+        id: putTokensPageComponent
+
+        YubiKeyWaitOpsPage {
+            id: putTokensPage
+
+            allowedOrientations: thisPage.allowedOrientations
+            yubiKey: thisPage.yubiKey
+            text: yubiKeyPresent ?
+                //: Status label
+                //% "Saving the tokens..."
+                qsTrId("yubikey-wait-saving_tokens") :
+                //: Status label
+                //% "Touch the same YubiKey to save the selected tokens"
+                qsTrId("yubikey-wait-put_selected_tokens")
+
         }
     }
 
@@ -230,32 +384,8 @@ Page {
                 //: Pulley menu item
                 //% "Reset the key"
                 text: qsTrId("yubikey-menu-reset")
-                enabled: !NfcAdapter.targetPresent
                 onEnabledChanged: pulleyMenu.updateVisibility()
-                onClicked: {
-                    pageStack.push(warningDialogComponent, {
-                        //: Warning text
-                        //% "Resetting the YubiKey irreversibly removes all secrets stored in it. This action cannot be undone. Are you sure that you really want to do it?"
-                        "text": qsTrId("yubikey-warning-reset_text"),
-                        "acceptDestinationAction": PageStackAction.Replace,
-                        "acceptDestination": waitPageComponent,
-                        "acceptDestinationProperties": {
-                            //: Status label
-                            //% "Touch the same YubiKey to reset it"
-                            "text": qsTrId("yubikey-status-waiting_to_reset"),
-                            "complete": function(page,keyState,waitId,success) {
-                                // When reset succeeds, YubiKeyRecognizer from
-                                // MainPage is expected to replace YubiKeyPage
-                                // when it detects YubiKey ID change
-                                if (!waitId || !success) {
-                                    page.waitForId(yubiKey.reset())
-                                } else {
-                                    page.tryAgain()
-                                }
-                            }
-                        }
-                    })
-                }
+                onClicked: _resetYubiKey()
             }
 
             MenuItem {
@@ -264,28 +394,15 @@ Page {
                 //: Pulley menu item
                 //% "Clear password"
                 text: qsTrId("yubikey-menu-clear_password")
-                enabled: !NfcAdapter.targetPresent && yubiKey.authAccess === YubiKeyCard.AccessGranted
+                enabled: yubiKey.authAccess === YubiKey.AccessGranted
                 onEnabledChanged: pulleyMenu.updateVisibility()
-                onClicked: {
-                    pageStack.push(waitPageComponent, {
-                        //: Status label
-                        //% "Touch the same YubiKey to clear the password"
-                        "text":  qsTrId("yubikey-wait-clear_password"),
-                        "complete": function(page,keyState,waitId,success) {
-                            if (keyState === YubiKeyCard.YubiKeyStateUnauthorized) {
-                                _invalidPassword = true
-                            } else if (!success) {
-                                page.waitForId(yubiKey.setPassword(""))
-                            }
-                        }
-                    })
-                }
+                onClicked: _clearPassword()
             }
 
             MenuItem {
                 id: setPasswordMenuItem
 
-                text: yubiKey.authAccess === YubiKeyCard.AccessGranted ?
+                text: yubiKey.authAccess === YubiKey.AccessGranted ?
                     //: Pulley menu item
                     //% "Change password"
                     qsTrId("yubikey-menu-change_password") :
@@ -294,12 +411,13 @@ Page {
                     qsTrId("yubikey-menu-set_password")
                 enabled: _authorized
                 onEnabledChanged: pulleyMenu.updateVisibility()
-                onClicked: pageStack.push("YubiKeyEnterPasswordPage.qml", {
-                    "yubiKeyId": yubiKeyId,
-                    "allowedOrientations": allowedOrientations,
-                    "destinationPage": thisPage,
-                    "changingPassword":  yubiKey.authAccess === YubiKeyCard.AccessGranted,
-                })
+                onClicked: {
+                    if (yubiKey.authAccess === YubiKey.AccessGranted) {
+                        _changePassword()
+                    } else {
+                        _createPassword()
+                    }
+                }
             }
 
             MenuItem {
@@ -308,17 +426,15 @@ Page {
                 //: Pulley menu item
                 //% "Add token"
                 text: qsTrId("yubikey-menu-add_token")
-                enabled: !NfcAdapter.targetPresent && _authorized
+                enabled: _authorized
                 onEnabledChanged: pulleyMenu.updateVisibility()
                 onClicked: {
                     var page = pageStack.push("ScanPage.qml", {
                         "allowedOrientations": allowedOrientations
                     })
-                    page.skip.connect(function() {
-                        pageStack.push(addTokenDialogComponent)
-                    })
+                    page.skip.connect(function() { _putToken({}) })
                     page.tokenDetected.connect(function(token) {
-                        pageStack.push(addTokenDialogComponent, {
+                        _putToken({
                             "type": token.type,
                             "algorithm": token.algorithm,
                             "label": token.label,
@@ -327,32 +443,7 @@ Page {
                             "counter": token.counter
                         })
                     })
-                    page.tokensDetected.connect(function(model) {
-                        pageStack.push("YubiKeyImportDialog.qml", {
-                            "allowedOrientations": allowedOrientations,
-                            "model": model,
-                            "acceptDestinationAction": PageStackAction.Push,
-                            "acceptDestination": waitPageComponent,
-                            "acceptDestinationProperties": {
-                                "destinationPage": thisPage,
-                                //: Status label
-                                //% "Touch YubiKey to save the selected tokens"
-                                "text":  qsTrId("yubikey-wait-put_selected_tokens"),
-                                "complete": function(page,keyState,waitId,success) {
-                                    if (keyState === YubiKeyCard.YubiKeyStateReady) {
-                                        if (success) {
-                                            pageStack.pop(thisPage)
-                                        } else {
-                                            var dialog = pageStack.previousPage(page)
-                                            page.waitForId(yubiKey.putTokens(dialog.selectedTokens))
-                                        }
-                                    } else {
-                                        page.tryAgain()
-                                    }
-                                }
-                            }
-                        })
-                    })
+                    page.tokensDetected.connect(_putTokens)
                 }
             }
         }
@@ -367,23 +458,14 @@ Page {
                 id: yubiKeyIcon
 
                 anchors.centerIn: parent
-                timeLeft: otpListModel.haveExpiringTotpCodes ? yubiKey.totpTimeLeft : 0
-                visible: !yubiKeyAccessDenied
-            }
-
-            HarbourHighlightIcon {
-                source: "images/yubikey-lock.svg"
-                sourceSize.width: Theme.iconSizeExtraLarge
-                anchors.centerIn: parent
-                visible: (yubiKeyAccessDenied && isLandscape)
+                timeLeft: yubiKey.haveTotpCodes ? yubiKey.totpTimeLeft : 0
             }
         }
 
         SilicaFlickable {
             id: contentFlickable
 
-            contentHeight: authDataColumn.y + authDataColumn.height + Theme.paddingLarge
-            interactive: !yubiKeyAccessDenied
+            contentHeight: content.y + content.height + content.spacing
             clip: true
             anchors {
                 bottom: parent.bottom
@@ -391,27 +473,24 @@ Page {
             }
 
             Column {
-                id: authDataColumn
+                id: content
 
                 width: parent.width
-                visible: opacity > 0
-                opacity: yubiKeyAccessDenied ? 0 : 1
+                spacing: Theme.paddingLarge
 
                 SilicaListView {
                     id: otpList
 
-                    model: YubiKeyAuthListModel {
+                    model: YubiKeyOtpListModel {
                         id: otpListModel
 
-                        yubiKeyId: yubiKey.yubiKeyId
-                        authList: yubiKey.yubiKeyOtpList
-                        authData: yubiKey.yubiKeyOtpData
-                        refreshableTokens: yubiKey.refreshableTokens
+                        yubiKey: thisPage.yubiKey
                     }
+
                     width: parent.width
                     height: Math.max(contentHeight, contentFlickable.height -
-                        authDataColumn.y - (headerItem.visible ?  headerItem.height : 0) -
-                        cardInfoColumn.height - 2 * Theme.paddingLarge)
+                        content.y - (headerItem.visible ?  headerItem.height : 0) -
+                        cardInfoColumn.height - 2 * content.spacing)
 
                     header: Component {
                         ListSeparator {
@@ -419,30 +498,28 @@ Page {
                         }
                     }
 
-                    delegate: YubiKeyAuthListItem {
+                    delegate: YubiKeyOtpListItem {
                         id: delegate
 
                         readonly property string itemName: model.name
                         readonly property string itemPassword: model.password
                         readonly property bool itemFavorite: model.favorite
-                        readonly property bool itemCanBeSteamToken: model.type === YubiKeyCard.TypeTOTP
-                        readonly property bool itemMarkedForRefresh: model.markedForRefresh
-                        readonly property bool itemMarkedForDeletion: model.markedForDeletion
+                        readonly property bool itemCanBeSteamToken: model.type === YubiKey.TypeTOTP
+                        readonly property bool itemMarkedForRefresh: model.entryOp === YubiKeyOtpListModel.EntryOpRefresh
+                        readonly property bool itemMarkedForDeletion: model.entryOp === YubiKeyOtpListModel.EntryOpDelete
                         readonly property bool itemCanCopyPassword: !itemMarkedForRefresh && !itemMarkedForDeletion && itemPassword !== ""
                         readonly property bool itemCanRename: !itemMarkedForRefresh && !itemMarkedForDeletion &&
-                            yubiKey.yubiKeyVersion >= YubiKeyCard.Version_5_3_0
+                            yubiKey.yubiKeyVersion >= YubiKey.Version_5_3_0
 
                         landscape: thisPage.isLandscape
                         name: itemName
+                        newName: model.newName
                         type: model.type
+                        entryOp: model.entryOp
                         password: itemPassword
                         steam: model.steam
                         favorite: itemFavorite
-                        expired: model.expired
-                        refreshable: model.refreshable
-                        markedForRefresh: itemMarkedForRefresh
-                        markedForDeletion: itemMarkedForDeletion
-                        totpValid: yubiKey.totpValid
+                        expired: model.type === YubiKey.TypeTOTP && !totpTimeLeft
                         menu: Component {
                             ContextMenu {
                                 id: contextMenu
@@ -466,7 +543,7 @@ Page {
                                     text: qsTrId("yubikey-menu-rename")
                                     onEnabledChanged: contextMenu.updateVisibility()
                                     enabled: delegate.itemCanRename
-                                    onClicked: renameToken(itemName)
+                                    onClicked: delegate.renameToken(itemName)
                                 }
                                 MenuItem {
                                     id: deleteMenuItem
@@ -476,7 +553,7 @@ Page {
                                     text: qsTrId("yubikey-menu-delete")
                                     onEnabledChanged: contextMenu.updateVisibility()
                                     enabled: !delegate.itemMarkedForDeletion
-                                    onClicked: delegate.markForDeletion()
+                                    onClicked: delegate.deleteToken()
                                 }
                                 MenuItem {
                                     id: cancelMenuItem
@@ -490,7 +567,7 @@ Page {
 
                                     onEnabledChanged: contextMenu.updateVisibility()
                                     enabled: delegate.itemMarkedForRefresh || delegate.itemMarkedForDeletion
-                                    onClicked: delegate.cancelMarks()
+                                    onClicked: otpListModel.cancelPendingOp(itemName)
                                 }
                                 MenuItem {
                                     id: favoriteMenuItem
@@ -536,14 +613,37 @@ Page {
                             }
                         }
 
-                        onRequestRefresh: markForRefresh()
+                        onRequestRefresh: otpListModel.refreshToken(itemName)
 
-                        onCancel: cancelMarks()
+                        onCancel: otpListModel.cancelPendingOp(itemName)
 
                         onClicked: {
                             if (copyPassword()) {
                                 clipboardNotification.publish()
                                 buzz.play()
+                            }
+                        }
+
+                        function renameToken(from) {
+                            pageStack.push("YubiKeyRenameTokenDialog.qml", {
+                                "otpModel": otpListModel,
+                                "allowedOrientations": allowedOrientations,
+                                "acceptDestinationAction": PageStackAction.Replace,
+                                "currentName":  from
+                            }).rename.connect(function(to) {
+                                otpListModel.renameToken(from, to)
+                            })
+                        }
+
+                        function deleteToken() {
+                            if (yubiKeyPresent) {
+                                //: Remorse popup text
+                                //% "Deleting"
+                                remorseAction(qsTrId("yubikey-menu-delete_remorse"), function() {
+                                    otpListModel.deleteToken(itemName)
+                                })
+                            } else {
+                                otpListModel.deleteToken(itemName)
                             }
                         }
 
@@ -554,19 +654,6 @@ Page {
                             } else {
                                 return false
                             }
-                        }
-
-                        function cancelMarks() {
-                            model.markedForRefresh = false
-                            model.markedForDeletion = false
-                        }
-
-                        function markForRefresh() {
-                            model.markedForRefresh = true
-                        }
-
-                        function markForDeletion() {
-                            model.markedForDeletion = true
                         }
 
                         function toggleFavorite() {
@@ -589,8 +676,6 @@ Page {
                     }
                 }
 
-                VerticalPadding{ }
-
                 Column {
                     id: cardInfoColumn
 
@@ -605,7 +690,7 @@ Page {
                         visible: yubiKey.yubiKeySerial !== 0
                         //: Card info label
                         //% "Serial: %1"
-                        text: qsTrId("yubikey-info-serial").arg(yubiKey.yubiKeySerial)
+                        text: qsTrId("yubikey-info-serial").arg(thisPage.yubiKeySerial)
                     }
 
                     Label {
@@ -615,8 +700,8 @@ Page {
                         color: Theme.secondaryHighlightColor
                         visible: yubiKey.yubiKeyVersionString !== ""
                         //: Card info label
-                        //% "Version: %1"
-                        text: qsTrId("yubikey-info-version").arg(yubiKey.yubiKeyVersionString)
+                        //% "Firmware: %1"
+                        text: qsTrId("yubikey-info-firmware").arg(thisPage.yubiKeyFirmware)
                     }
 
                     Label {
@@ -632,58 +717,11 @@ Page {
             VerticalScrollDecorator { }
         }
 
-        Loader {
-            active: yubiKeyAccessDenied
-            anchors {
-                left: contentFlickable.left
-                right: contentFlickable.right
-                top: parent.top
-                bottom: parent.bottom
-            }
+        YubiKeyPopup {
+            id: popupPanel
 
-            sourceComponent: Component {
-                YubiKeyAuthorizeView {
-                    isLandscape: thisPage.isLandscape
-                    invalidPassword: _invalidPassword
-                    yubiKeyPresent: yubiKey.present
-                    contentHeight: thisPage.height
-                    onEnterPassword: {
-                        if (yubiKey.submitPassword(password, savePassword)) {
-                            if (yubiKey.present) {
-                                thisPage.replace()
-                            } else {
-                                var yubiKeyPage = thisPage
-                                var page = pageStack.push(waitPageComponent, {
-                                    //: Status label
-                                    //% "Touch the same YubiKey to validate the password"
-                                    "text": qsTrId("yubikey-status-waiting_to_authorize"),
-                                    "complete": function(page,keyState,waitId,success) {
-                                        switch (keyState) {
-                                        case YubiKeyCard.YubiKeyStateReady:
-                                            yubiKeyPage.replace()
-                                            break
-                                        case YubiKeyCard.YubiKeyStateUnauthorized:
-                                            page.backNavigation = true
-                                            _invalidPassword = true
-                                            break
-                                        }
-                                    }
-                                })
-                                page.statusChanged.connect(function() {
-                                    if (page.status === PageStatus.Active) {
-                                        _invalidPassword = false
-                                    }
-                                })
-                            }
-                        }
-                    }
-                }
-            }
+            autoHide: !yubiKeyPresent
         }
-    }
-
-    YubiKeyErrorPopup {
-        id: errorPopup
     }
 
     states: [
@@ -694,11 +732,10 @@ Page {
                 PropertyChanges {
                     target: yubiKeyIconContainer
                     width: parent.width
-                    height: yubiKeyAccessDenied ? yubiKeyIconContainer.maxHeight :
-                        Math.max(Math.min(yubiKeyIconContainer.maxHeight, thisPage.height - contentFlickable.contentHeight), yubiKeyIconContainer.minHeight)
+                    height: Math.max(Math.min(yubiKeyIconContainer.maxHeight, _fullHeight - contentFlickable.contentHeight), yubiKeyIconContainer.minHeight)
                 },
                 PropertyChanges {
-                    target: authDataColumn
+                    target: content
                     y: 0
                 },
                 AnchorChanges {
@@ -717,10 +754,10 @@ Page {
                 PropertyChanges {
                     target: yubiKeyIconContainer
                     width: yubiKeyIcon.width + 2 * Theme.itemSizeLarge
-                    height: thisPage.height
+                    height: _fullHeight
                 },
                 PropertyChanges {
-                    target: authDataColumn
+                    target: content
                     y: Theme.paddingLarge
                 },
                 AnchorChanges {

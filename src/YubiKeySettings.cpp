@@ -44,6 +44,7 @@
 #include <QtCore/QAtomicInt>
 #include <QtCore/QDir>
 #include <QtCore/QSettings>
+#include <QtCore/QStringList>
 
 // ==========================================================================
 // YubiKeySettings::Private
@@ -63,14 +64,15 @@ public:
     Private(const QByteArray&);
     ~Private();
 
-    static QString getFavoriteHash(QSettings*);
+    static QByteArray getFavoriteHash(QSettings*);
 
     void connect(YubiKeySettings*);
     bool isFavoriteName(const QString&);
-    void setFavoriteHash(const QString&);
-    void setSteamHashes(const QStringList&);
-    void addSteamHash(const QString&);
-    void removeSteamHash(const QString&);
+    void setFavoriteHash(const QByteArray&);
+    void setFavoriteName(const QString&);
+    void setSteamHashes(const QByteArrayList&);
+    void addSteamHash(const QByteArray&);
+    void removeSteamHash(const QByteArray&);
     void steamHashesUpdated();
     void tokenRenamed(const QString&, const QString&);
 
@@ -89,8 +91,8 @@ public:
     QDir iConfigDir;
     const QString iSettingsFile;
     QSettings* iSettings;
-    QString iFavoriteHash;
-    QStringList iSteamHashes;
+    QByteArray iFavoriteHash;
+    QByteArrayList iSteamHashes;
 };
 
 QMap<QByteArray,YubiKeySettings::Private*> YubiKeySettings::Private::gSettingsMap;
@@ -114,7 +116,19 @@ YubiKeySettings::Private::Private(
         HDEBUG("Loading" << qPrintable(iSettingsFile));
         iSettings = new QSettings(iSettingsFile, QSettings::IniFormat, this);
         iFavoriteHash = getFavoriteHash(iSettings);
-        iSteamHashes = iSettings->value(STEAM_ENTRY).toString().split(LIST_SEPARATOR);
+
+        // Convert hex steam hashes into byte arrays
+        const QStringList steamHashes(iSettings->value(STEAM_ENTRY).
+            toString().split(LIST_SEPARATOR));
+
+        iSteamHashes.reserve(steamHashes.count());
+        for (QStringListIterator it(steamHashes); it.hasNext();) {
+            const QByteArray hash(QByteArray::fromHex(it.next().toLatin1()));
+
+            if (!hash.isEmpty()) {
+                iSteamHashes.append(hash);
+            }
+        }
     }
 
     gSettingsMap.insert(iYubiKeyId, this);
@@ -161,7 +175,7 @@ YubiKeySettings::Private::connect(
         SIGNAL(steamHashesChanged()));
 }
 
-QString
+QByteArray
 YubiKeySettings::Private::getFavoriteHash(
     QSettings* aSettings)
 {
@@ -182,17 +196,18 @@ YubiKeySettings::Private::getFavoriteHash(
                 }
             }
             if (isSha1) {
-                return favorite;
+                return QByteArray::fromHex(favorite.toLatin1());
             } else {
-                QString hash(YubiKeyUtil::nameHash(favorite));
+                const QByteArray hash(YubiKeyUtil::nameHash(favorite));
+                const QString hex(QString::fromLatin1(hash.toHex()));
 
-                HDEBUG("Replacing favorite" << favorite << "with" << hash);
-                aSettings->setValue(FAVORITE_ENTRY, hash);
+                HDEBUG("Replacing favorite" << favorite << "with" << hex);
+                aSettings->setValue(FAVORITE_ENTRY, hex);
                 return hash;
             }
         }
     }
-    return QString();
+    return QByteArray();
 }
 
 bool
@@ -204,28 +219,49 @@ YubiKeySettings::Private::isFavoriteName(
 
 void
 YubiKeySettings::Private::setFavoriteHash(
-    const QString& aHash)
+    const QByteArray& aHash)
 {
     if (iFavoriteHash != aHash) {
         iFavoriteHash = aHash;
         update(FAVORITE_ENTRY, iFavoriteHash.isEmpty() ? QVariant() :
-            QVariant::fromValue(iFavoriteHash));
+            QVariant::fromValue(QString::fromLatin1(iFavoriteHash.toHex())));
         Q_EMIT favoriteHashChanged();
     }
 }
 
 void
+YubiKeySettings::Private::setFavoriteName(
+    const QString& aName)
+{
+    setFavoriteHash(aName.isEmpty() ? QByteArray() :
+        YubiKeyUtil::nameHash(aName));
+
+}
+
+void
 YubiKeySettings::Private::steamHashesUpdated()
 {
-    HDEBUG("Steam hashes" << iSteamHashes);
-    update(STEAM_ENTRY, iSteamHashes.isEmpty() ? QVariant() :
-        QVariant::fromValue(iSteamHashes.join(LIST_SEPARATOR)));
+    if (iSteamHashes.isEmpty()) {
+        HDEBUG("No steam hashes");
+        update(STEAM_ENTRY, QVariant());
+    } else {
+        QString value;
+
+        for (QByteArrayListIterator it(iSteamHashes); it.hasNext();) {
+            if (!value.isEmpty()) {
+                value.append(LIST_SEPARATOR);
+            }
+            value.append(QString::fromLatin1(it.next().toHex()));
+        }
+        HDEBUG("Steam hashes" << value);
+        update(STEAM_ENTRY, value);
+    }
     Q_EMIT steamHashesChanged();
 }
 
 void
 YubiKeySettings::Private::setSteamHashes(
-    const QStringList& aList)
+    const QByteArrayList& aList)
 {
     if (iSteamHashes != aList) {
         iSteamHashes = aList;
@@ -235,18 +271,18 @@ YubiKeySettings::Private::setSteamHashes(
 
 void
 YubiKeySettings::Private::addSteamHash(
-    const QString& aHash)
+    const QByteArray& aHash)
 {
     if (!aHash.isEmpty() && !iSteamHashes.contains(aHash)) {
         iSteamHashes.append(aHash);
-        iSteamHashes.sort();
+        qStableSort(iSteamHashes);
         steamHashesUpdated();
     }
 }
 
 void
 YubiKeySettings::Private::removeSteamHash(
-    const QString& aHash)
+    const QByteArray& aHash)
 {
     if (iSteamHashes.removeOne(aHash)) {
         steamHashesUpdated();
@@ -261,11 +297,11 @@ YubiKeySettings::Private::tokenRenamed(
     if (aFrom != aTo) {
         if (isFavoriteName(aFrom)) {
             HDEBUG("Favorite token renamed");
-            setFavoriteHash(aTo.isEmpty() ? QString() : YubiKeyUtil::nameHash(aTo));
+            setFavoriteName(aTo);
         }
         if (iSteamHashes.removeOne(YubiKeyUtil::steamNameHash(aFrom))) {
             iSteamHashes.append(YubiKeyUtil::steamNameHash(aTo));
-            iSteamHashes.sort();
+            qStableSort(iSteamHashes);
             steamHashesUpdated();
         }
     }
@@ -346,15 +382,15 @@ YubiKeySettings::yubiKeyId() const
     return iPrivate ? iPrivate->iYubiKeyId : QByteArray();
 }
 
-QString
+QByteArray
 YubiKeySettings::favoriteHash() const
 {
-    return iPrivate ? iPrivate->iFavoriteHash : QString();
+    return iPrivate ? iPrivate->iFavoriteHash : QByteArray();
 }
 
 void
 YubiKeySettings::setFavoriteHash(
-    QString aHash)
+    QByteArray aHash)
 {
     if (iPrivate) {
         iPrivate->setFavoriteHash(aHash);
@@ -368,13 +404,19 @@ YubiKeySettings::isFavoriteName(
     return iPrivate && iPrivate->isFavoriteName(aName);
 }
 
+bool
+YubiKeySettings::isFavoriteHash(
+    QByteArray aHash) const
+{
+    return !aHash.isEmpty() && iPrivate && iPrivate->iFavoriteHash == aHash;
+}
+
 void
 YubiKeySettings::setFavoriteName(
     QString aName)
 {
     if (iPrivate) {
-        iPrivate->setFavoriteHash(aName.isEmpty() ? QString() :
-            YubiKeyUtil::nameHash(aName));
+        iPrivate->setFavoriteName(aName);
     }
 }
 
@@ -382,26 +424,26 @@ void
 YubiKeySettings::clearFavorite()
 {
     if (iPrivate) {
-        iPrivate->setFavoriteHash(QString());
+        iPrivate->setFavoriteHash(QByteArray());
     }
 }
 
-QStringList
+QByteArrayList
 YubiKeySettings::steamHashes() const
 {
-    return iPrivate ? iPrivate->iSteamHashes : QStringList();
+    return iPrivate ? iPrivate->iSteamHashes : QByteArrayList();
 }
 
 bool
 YubiKeySettings::isSteamHash(
-    QString aHash) const
+    QByteArray aHash) const
 {
     return iPrivate && iPrivate->iSteamHashes.contains(aHash);
 }
 
 void
 YubiKeySettings::setSteamHashes(
-    QStringList aHashes)
+    QByteArrayList aHashes)
 {
     if (iPrivate) {
         iPrivate->setSteamHashes(aHashes);
@@ -410,7 +452,7 @@ YubiKeySettings::setSteamHashes(
 
 void
 YubiKeySettings::addSteamHash(
-    QString aHash)
+    QByteArray aHash)
 {
     if (iPrivate) {
         iPrivate->addSteamHash(aHash);
@@ -419,7 +461,7 @@ YubiKeySettings::addSteamHash(
 
 void
 YubiKeySettings::removeSteamHash(
-    QString aHash)
+    QByteArray aHash)
 {
     if (iPrivate) {
         iPrivate->removeSteamHash(aHash);

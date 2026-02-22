@@ -38,11 +38,15 @@
  */
 
 #include "YubiKeyAppSettings.h"
-#include "YubiKeyAuthListModel.h"
-#include "YubiKeyCard.h"
 #include "YubiKeyDefs.h"
+#include "YubiKey.h"
 #include "YubiKeyImportModel.h"
-#include "YubiKeyRecognizer.h"
+#include "YubiKeyIo.h"
+#include "YubiKeyIoManager.h"
+#include "YubiKeyNdefHandler.h"
+#include "YubiKeyOpTracker.h"
+#include "YubiKeyOtp.h"
+#include "YubiKeyOtpListModel.h"
 #include "YubiKeyToken.h"
 #include "YubiKeyUtil.h"
 
@@ -60,6 +64,7 @@
 
 #include <sailfishapp.h>
 
+#include <QtCore/QScopedPointer>
 #include <QtGui/QGuiApplication>
 #include <QtQuick>
 
@@ -76,30 +81,35 @@ static void register_types(const char* uri, int v1 = 1, int v2 = 0)
 
     REGISTER_SINGLETON_TYPE(uri, v1, v2, NfcAdapter);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, NfcSystem);
-    REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeyRecognizer);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeyAppSettings);
     REGISTER_SINGLETON_TYPE(uri, v1, v2, YubiKeyUtil);
     REGISTER_TYPE(uri, v1, v2, HarbourSingleImageProvider);
     REGISTER_TYPE(uri, v1, v2, NfcMode);
-    REGISTER_TYPE(uri, v1, v2, YubiKeyCard);
-    REGISTER_TYPE(uri, v1, v2, YubiKeyAuthListModel);
+    REGISTER_TYPE(uri, v1, v2, YubiKey);
     REGISTER_TYPE(uri, v1, v2, YubiKeyImportModel);
+    REGISTER_TYPE(uri, v1, v2, YubiKeyIoManager);
+    REGISTER_TYPE(uri, v1, v2, YubiKeyNdefHandler);
+    REGISTER_TYPE(uri, v1, v2, YubiKeyOpTracker);
+    REGISTER_TYPE(uri, v1, v2, YubiKeyOtpListModel);
     REGISTER_TYPE(uri, v1, v2, QrCodeScanner);
+    REGISTER_UNCREATABLE_TYPE(uri, v1, v2, YubiKeyIo);
 
+    qRegisterMetaType<YubiKeyOtp>();
     qRegisterMetaType<YubiKeyToken>();
+    qRegisterMetaType<QList<YubiKeyOtp> >();
     qRegisterMetaType<QList<YubiKeyToken> >();
 }
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication* app = SailfishApp::application(argc, argv);
+    QScopedPointer<QCoreApplication> app(SailfishApp::application(argc, argv));
 
     app->setApplicationName(YUBIKEY_APP_NAME);
     register_types(YUBIKEY_APP_QML_IMPORT, 1, 0);
 
     // Load translations
     QLocale locale;
-    QTranslator* tr = new QTranslator(app);
+    QTranslator* tr = new QTranslator(app.data());
 #ifdef OPENREPOS
     // OpenRepos build has settings applet
     const QString transDir("/usr/share/translations");
@@ -121,16 +131,12 @@ int main(int argc, char *argv[])
 #endif
 
     // Create the view
-    QQuickView* view = SailfishApp::createView();
+    QScopedPointer<QQuickView> view(SailfishApp::createView());
 
     // Initialize the view and show it
     view->setTitle(qtTrId("yubikey-app_name"));
     view->setSource(SailfishApp::pathTo("qml/main.qml"));
     view->showFullScreen();
 
-    int ret = app->exec();
-
-    delete view;
-    delete app;
-    return ret;
+    return app->exec();
 }

@@ -11,13 +11,13 @@ ApplicationWindow {
     //% "YubiKey"
     readonly property string title: qsTrId("yubikey-app_name")
 
-    property Page yubiKeyPage: !!mainPage ? mainPage.yubiKeyPage : null
     property Page mainPage
 
     initialPage: Component {
         MainPage {
             id: mainPage
 
+            yubiKey: key
             allowedOrientations: thisApp.allowedOrientations
             Component.onCompleted: thisApp.mainPage = mainPage
         }
@@ -25,7 +25,7 @@ ApplicationWindow {
 
     cover: Component {
         CoverPage {
-            yubiKeyPage: thisApp.yubiKeyPage
+            yubiKeyPage: !!mainPage ? mainPage.yubiKeyPage : null
             onClearCardInfo: pageStack.pop(mainPage, PageStackAction.Immediate)
         }
     }
@@ -34,5 +34,19 @@ ApplicationWindow {
         enableModes: NfcSystem.ReaderWriter
         disableModes: NfcSystem.P2PInitiator + NfcSystem.P2PTarget + NfcSystem.CardEmulation
         active: Qt.application.active
+    }
+
+    YubiKeyIoManager {
+        id: ioManager
+    }
+
+    YubiKeyNdefHandler {
+        yubiKeyIo: ioManager.yubiKeyIo
+    }
+
+    YubiKey {
+        id: key
+
+        yubiKeyIo: ioManager.yubiKeyIo
     }
 }

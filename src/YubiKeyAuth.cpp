@@ -175,8 +175,10 @@ YubiKeyAuth::Private::setAccessKey(
 
             if (QFile::remove(iAuthFile)) {
                 HDEBUG("Removed" << qPrintable(iAuthFile));
-            } else {
+#if HARBOUR_DEBUG
+            } else if (QFile::exists(iAuthFile)) {
                 HDEBUG("Failed to remove" << qPrintable(iAuthFile));
+#endif // HARBOUR_DEBUG
             }
         }
 
@@ -286,6 +288,18 @@ YubiKeyAuth::operator=(
     return *this;
 }
 
+void
+YubiKeyAuth::clear()
+{
+    if (iPrivate) {
+        iPrivate->disconnect(this);
+        if (!iPrivate->iRef.deref()) {
+            delete iPrivate;
+        }
+        iPrivate = Q_NULLPTR;
+    }
+}
+
 bool
 YubiKeyAuth::isValid() const
 {
@@ -312,6 +326,14 @@ YubiKeyAuth::setAccessKey(
     bool aSave)
 {
     return iPrivate && iPrivate->setAccessKey(aAlgorithm, aAccessKey, aSave);
+}
+
+QByteArray
+YubiKeyAuth::calculateResponse(
+    QByteArray aChallenge,
+    YubiKeyAlgorithm aAlgorithm) const
+{
+    return calculateResponse(getAccessKey(aAlgorithm), aChallenge, aAlgorithm);
 }
 
 bool

@@ -68,7 +68,7 @@ Dialog {
                     color: Theme.secondaryHighlightColor
                     truncationMode: TruncationMode.Fade
                     font.pixelSize: Theme.fontSizeExtraSmall
-                    text: model.type === YubiKeyCard.TypeTOTP ? "TOTP" : "HOTP"
+                    text: model.type === YubiKey.TypeTOTP ? "TOTP" : "HOTP"
                 }
             }
 

@@ -29,10 +29,31 @@ Dialog {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            InfoLabel {
-                id: titleLabel
+            Row {
+                // Center the title
+                x: Math.max(Math.floor((parent.width - titleLabel.width)/2 - titleLabel.x), 0)
+                spacing: Theme.paddingLarge
 
-                font.bold: true
+                Image {
+                    source: "images/warning.svg"
+                    sourceSize.height: Theme.iconSizeSmall
+                    anchors.bottom: titleLabel.baseline
+                }
+
+                Label {
+                    id: titleLabel
+
+                    //: Warning dialog title
+                    //% "Warning"
+                    text: qsTrId("yubikey-warning-title")
+                    color: Theme.secondaryHighlightColor
+                    font {
+                        pixelSize: Theme.fontSizeExtraLarge
+                        family: Theme.fontFamilyHeading
+                        capitalization: Font.AllUppercase
+                        bold: true
+                    }
+                }
             }
 
             Label {

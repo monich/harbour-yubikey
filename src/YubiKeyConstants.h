@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
+ * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -40,7 +40,7 @@
 #ifndef _YUBIKEY_CONSTANTS_H
 #define _YUBIKEY_CONSTANTS_H
 
-#include <QtGlobal>
+#include <QtCore/QtGlobal>
 
 class YubiKeyConstants
 {
@@ -78,7 +78,8 @@ public:
     #define RC_MORE_DATA(rc) (((rc) & 0xff00) == 0x6100)
     static const uint RC_OK = 0x9000;
     static const uint RC_GENERIC_ERROR = 0x6581;
-    static const uint RC_AUTH_NOT_ENABLED = 0x6984;
+    static const uint RC_AUTH_REQUIRED = 0x6982;
+    static const uint RC_FILE_NOT_FOUND = 0x6a82;
     static const uint RC_WRONG_SYNTAX = 0x6a80;
     static const uint RC_NO_SPACE = 0x6a84;
 };

@@ -9,6 +9,7 @@ Page {
     backNavigation: false
     showNavigationIndicator: false
 
+    property var yubiKey
     property Page yubiKeyPage
 
     readonly property bool _targetPresent: NfcAdapter.targetPresent
@@ -16,82 +17,109 @@ Page {
 
     onStatusChanged: {
         if (status === PageStatus.Active) {
-            _initialized = true
-            if (YubiKeyRecognizer.yubiKeyId === "") {
-                if (yubiKeyPage) {
-                    yubiKeyPage = null
-                }
-            } else {
-                checkYubiKeyPage()
+            yubiKey.clear()
+            if (!_initialized) {
+                _initialized = true
+                considerNextPageRequest.schedule()
+            } else if (yubiKeyPage) {
+                yubiKeyPage = null
             }
         }
     }
 
-    function checkYubiKeyPage() {
-        if (YubiKeyRecognizer.yubiKeyId !== "") {
-            if (!yubiKeyPage) {
-                createYubiKeyPage(YubiKeyRecognizer.yubiKeyId, function(prop) {
-                    return pageStack.push(yubiKeyPageComponent, prop)
-                })
-            } else if (yubiKeyPage.yubiKeyId !== YubiKeyRecognizer.yubiKeyId) {
-                replaceYubiKeyPage(YubiKeyRecognizer.yubiKeyId)
-            } else {
-                YubiKeyRecognizer.clearState()
+    Connections {
+        target: yubiKey
+        onYubiKeyIdChanged: considerNextPageRequest.schedule()
+        onAuthAccessChanged: considerNextPageRequest.schedule()
+        onRestrictedYubiKeyConnected: considerNextPageRequest.schedule()
+        onYubiKeyConnected: considerNextPageRequest.schedule()
+        onYubiKeyValidationFailed: considerNextPageRequest.schedule()
+    }
+
+    PageTransitionRequest {
+        id: considerNextPageRequest
+
+        onExecute: {
+            // The main page doesn't have any attached pages, the next page must
+            // be above it (if there's any). The page above must provide isOk()
+            // function returning true if it's ok with the current YubiKey state
+            var nextPage = pageStack.nextPage(thisPage)
+            if (!nextPage || !nextPage.isOk()) {
+                var method = nextPage ? replacePage : pushPage
+                switch (yubiKey.authAccess) {
+                case YubiKey.AccessNotActivated:
+                    createYubiKeyNotActivatedPage(method)
+                    break
+                case YubiKey.AccessDenied:
+                    createYubiAuthorizePage(method)
+                    break
+                case YubiKey.AccessOpen:
+                case YubiKey.AccessGranted:
+                    createYubiKeyPage(method)
+                    break
+                }
             }
         }
     }
 
-    function replaceYubiKeyPage(cardId) {
-        createYubiKeyPage(cardId, function(prop) {
-            return pageStack.replaceAbove(thisPage, yubiKeyPageComponent, prop)
+    function createYubiKeyNotActivatedPage(createPage) {
+        yubiKeyPage = null
+        createPage(yubiKeyNotActivatedPageComponent)
+    }
+
+    function createYubiAuthorizePage(createPage) {
+        yubiKeyPage = null
+        createPage(yubiKeyAuthorizePageComponent)
+    }
+
+    function createYubiKeyPage(createPage) {
+        // Make a copy of these 3 fields.
+        // They never as long as we're dealing with the same YubiKey.
+        var yubiKeyId = yubiKey.yubiKeyId
+        var yubiKeySerial = yubiKey.yubiKeySerial
+        var yubiKeyFirmware = yubiKey.yubiKeyVersionString
+        yubiKeyPage = createPage(yubiKeyPageComponent, {
+            "yubiKeyId": yubiKeyId,
+            "yubiKeySerial": yubiKeySerial,
+            "yubiKeyFirmware" : yubiKeyFirmware
         })
     }
 
-    function createYubiKeyPage(cardId,action) {
-        YubiKeyRecognizer.clearState()
-        var prevYubiKeyPage = yubiKeyPage
-        var newYubiKeyPage = yubiKeyPage = action({
-            "allowedOrientations": thisPage.allowedOrientations,
-            "yubiKeyId": cardId
-        })
-        yubiKeyPage.replacePage.connect(replaceYubiKeyPage)
-        if (prevYubiKeyPage) {
-            newYubiKeyPage.statusChanged.connect(function() {
-                if (newYubiKeyPage.status === PageStatus.Inactive) {
-                    // Replaced page doesn't always get deallocated,
-                    // disconnect useless signals in case if it doesn't
-                    prevYubiKeyPage.yubiKeyId = ""
-                }
-            })
+    function pushPage(comp,prop) {
+        return pageStack.push(comp, prop)
+    }
+
+    function replacePage(comp,prop) {
+        for (var p = pageStack.nextPage(thisPage); p; p = pageStack.nextPage(p)) {
+            p.canNavigateForward = true
         }
-        newYubiKeyPage.yubiKeyReset.connect(function() {
-            //: Pop-up notification
-            //% "YubiKey has been reset"
-            notification.previewBody = qsTrId("yubikey-notification-reset")
-            notification.publish()
-        })
+        return pageStack.replaceAbove(thisPage, comp, prop)
+    }
+
+    Component {
+        id: yubiKeyNotActivatedPageComponent
+
+        YubiKeyNotActivatedPage {
+            allowedOrientations: thisPage.allowedOrientations
+            yubiKey: thisPage.yubiKey
+        }
+    }
+
+    Component {
+        id: yubiKeyAuthorizePageComponent
+
+        YubiKeyAuthorizeDialog {
+            allowedOrientations: thisPage.allowedOrientations
+            yubiKey: thisPage.yubiKey
+        }
     }
 
     Component {
         id: yubiKeyPageComponent
 
         YubiKeyPage {
-        }
-    }
-
-    Connections {
-        target: YubiKeyRecognizer
-        onYubiKeyIdChanged: checkYubiKeyPage()
-    }
-
-    Notification {
-        id: notification
-
-        expireTimeout: 2000
-        Component.onCompleted: {
-            if ('icon' in notification) {
-                notification.icon = Qt.resolvedUrl("images/yubikey.svg")
-            }
+            allowedOrientations: thisPage.allowedOrientations
+            yubiKey: thisPage.yubiKey
         }
     }
 

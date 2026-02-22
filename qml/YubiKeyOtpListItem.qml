@@ -8,24 +8,31 @@ ListItem {
     id: thisItem
 
     property int type
-    property alias name: nameLabel.text
+    property int entryOp
+    property string name
+    property string newName
     property string password
     property bool steam
     property bool favorite
     property bool expired
-    property bool refreshable
     property bool landscape
-    property bool totpValid
-    property bool markedForRefresh
-    property bool markedForDeletion
+
+    readonly property bool _markedForRefresh: entryOp === YubiKeyOtpListModel.EntryOpRefresh
+    readonly property bool _markedForRename: entryOp === YubiKeyOtpListModel.EntryOpRename
+    readonly property bool _markedForDeletion: entryOp === YubiKeyOtpListModel.EntryOpDelete
+    readonly property bool _markedForDeletionOrRename: _markedForDeletion || _markedForRename
+    readonly property bool _operationPending: _markedForDeletionOrRename || _markedForRefresh
+
 
     contentHeight: Theme.itemSizeMedium
 
     signal cancel()
     signal requestRefresh()
 
+    readonly property bool _refreshable: type === YubiKey.TypeHOTP
+
     onPasswordChanged: {
-        if (refreshable) {
+        if (_refreshable) {
             actionButtonAnimation.start()
         }
     }
@@ -43,13 +50,12 @@ ListItem {
     }
 
     Column {
-        visible: !markedForDeletion
         spacing: Theme.paddingMedium
         anchors {
             left: parent.left
             leftMargin: thisItem.landscape ? Theme.paddingLarge : Theme.horizontalPageMargin
             right: rightArea.left
-            rightMargin: (type === YubiKeyCard.TypeHOTP) ? 0 : Theme.paddingLarge
+            rightMargin: _refreshable ? 0 : Theme.paddingLarge
             verticalCenter: parent.verticalCenter
         }
 
@@ -57,9 +63,14 @@ ListItem {
             id: nameLabel
 
             width: parent.width
-            color: favorite ? Theme.primaryColor : Theme.highlightColor
-            font.bold: favorite
+            color: (favorite && !_markedForDeletionOrRename) ? Theme.primaryColor : Theme.highlightColor
+            font {
+                bold: favorite && !_markedForDeletionOrRename
+                strikeout: _markedForDeletion
+            }
             truncationMode: TruncationMode.Fade
+            text: _markedForRename ? newName : name
+            opacity: _markedForDeletionOrRename ? 0.4 : 1
         }
 
         Label {
@@ -70,14 +81,23 @@ ListItem {
                 bold: favorite
             }
             truncationMode: TruncationMode.Fade
-            text: steam ? "Steam" : type === YubiKeyCard.TypeTOTP ? "TOTP" : "HOTP"
+            opacity: _markedForDeletionOrRename ? 0.4 : 1
+            //: List item text
+            //% "Touch YubiKey to delete this token"
+            text: _markedForDeletion ? qsTrId("yubikey-item-touch_to_delete") :
+                //: List item text
+                //% "Touch YubiKey to rename this token"
+                _markedForRename ? qsTrId("yubikey-item-touch_to_rename")  :
+                steam ? "Steam" :
+                type === YubiKey.TypeTOTP ? "TOTP" :
+                type === YubiKey.TypeHOTP ? "HOTP" :
+                ""
         }
     }
 
     Row {
         id: rightArea
 
-        visible: !markedForDeletion
         height: parent.height
         spacing: isLandscape ? Theme.paddingLarge : 0
         anchors {
@@ -90,10 +110,10 @@ ListItem {
 
             anchors.verticalCenter: parent.verticalCenter
             highlighted: down || thisItem.down
-            visible: refreshable
+            visible: _markedForDeletionOrRename || _refreshable
             opacity: menuOpen ? 0.4 : 1
-            icon.source: markedForRefresh ? "image://theme/icon-m-clear" : "image://theme/icon-m-refresh"
-            onClicked: markedForRefresh ? thisItem.cancel() : thisItem.requestRefresh()
+            icon.source: _operationPending ? "image://theme/icon-m-clear" : "image://theme/icon-m-refresh"
+            onClicked: _operationPending ? thisItem.cancel() : thisItem.requestRefresh()
         }
 
         Label {
@@ -106,8 +126,8 @@ ListItem {
                 family: Theme.fontFamilyHeading
                 bold: true
             }
-            visible: opacity > 0
-            opacity: (expired || markedForRefresh) ? 0.4 : 1
+            visible: !_markedForDeletionOrRename && opacity > 0
+            opacity: (expired || _markedForRefresh) ? 0.4 : 1
             transform: HarbourTextFlip {
                 text: thisItem.password
                 target: passwordLabel
@@ -115,39 +135,6 @@ ListItem {
 
             Behavior on opacity { FadeAnimation { duration: 250 } }
         }
-    }
-
-    Label {
-        anchors {
-            verticalCenter: parent.verticalCenter
-            left: parent.left
-            leftMargin: Theme.horizontalPageMargin
-            right: clearButton.left
-            rightMargin: Theme.paddingLarge
-        }
-        visible: markedForDeletion
-        color: thisItem.down ? Theme.secondaryHighlightColor : Theme.secondaryColor
-        font.pixelSize: Theme.fontSizeSmall
-        wrapMode: Text.Wrap
-        opacity: 0.4
-        //: List item text
-        //% "Touch YubiKey to delete this token"
-        text: qsTrId("yubikey-item-touch_to_delete")
-    }
-
-    IconButton {
-        id: clearButton
-
-        anchors {
-            verticalCenter: parent.verticalCenter
-            right: parent.right
-            rightMargin: Theme.horizontalPageMargin
-        }
-        highlighted: down || thisItem.down
-        visible: markedForDeletion
-        opacity: menuOpen ? 0.4 : 1
-        icon.source: "image://theme/icon-m-clear"
-        onClicked: thisItem.cancel()
     }
 
     ListSeparator {

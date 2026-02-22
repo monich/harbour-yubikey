@@ -58,9 +58,11 @@ public:
 
     YubiKeyAuth& operator = (const YubiKeyAuth&);
 
+    void clear();
     bool isValid() const;
     QByteArray yubiKeyId() const;
     QByteArray getAccessKey(YubiKeyAlgorithm) const;
+    QByteArray calculateResponse(QByteArray, YubiKeyAlgorithm) const;
     bool setAccessKey(YubiKeyAlgorithm, QByteArray, bool);
     bool setPassword(YubiKeyAlgorithm, QString, bool);
     void clearPassword();

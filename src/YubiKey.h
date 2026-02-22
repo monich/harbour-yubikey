@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
- * Copyright (C) 2022 Jolla Ltd.
+ * Copyright (C) 2026 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -40,76 +39,119 @@
 #ifndef _YUBIKEY_H
 #define _YUBIKEY_H
 
+#include "YubiKeyConstants.h"
+#include "YubiKeyOp.h"
+#include "YubiKeyOtp.h"
 #include "YubiKeyToken.h"
 
-#include <QtCore/QByteArray>
-#include <QtCore/QDebug>
+#include <QtCore/QList>
 #include <QtCore/QObject>
-#include <QtCore/QStringList>
+
+class YubiKeyIo;
 
 class YubiKey :
     public QObject
 {
     Q_OBJECT
-    Q_DISABLE_COPY(YubiKey)
-
-private:
-    YubiKey(const QByteArray);
-    ~YubiKey();
+    Q_PROPERTY(YubiKeyIo* yubiKeyIo READ yubiKeyIo WRITE setYubiKeyIo NOTIFY yubiKeyIoChanged)
+    Q_PROPERTY(QString yubiKeyId READ yubiKeyIdString NOTIFY yubiKeyIdChanged)
+    Q_PROPERTY(uint yubiKeySerial READ yubiKeySerial NOTIFY yubiKeySerialChanged)
+    Q_PROPERTY(uint yubiKeyVersion READ yubiKeyVersion NOTIFY yubiKeyVersionChanged)
+    Q_PROPERTY(QString yubiKeyVersionString READ yubiKeyVersionString NOTIFY yubiKeyVersionChanged)
+    Q_PROPERTY(AuthAccess authAccess READ authAccess NOTIFY authAccessChanged)
+    Q_PROPERTY(QList<YubiKeyOtp> otpList READ otpList NOTIFY otpListChanged)
+    Q_PROPERTY(bool otpListFetched READ otpListFetched NOTIFY otpListFetchedChanged)
+    Q_PROPERTY(bool present READ present NOTIFY presentChanged)
+    Q_PROPERTY(bool updatingPasswords READ updatingPasswords NOTIFY updatingPasswordsChanged)
+    Q_PROPERTY(bool haveTotpCodes READ haveTotpCodes NOTIFY haveTotpCodesChanged)
+    Q_PROPERTY(bool haveBeenReset READ haveBeenReset NOTIFY haveBeenResetChanged)
+    Q_PROPERTY(qreal totpTimeLeft READ totpTimeLeft NOTIFY totpTimeLeftChanged)
+    Q_ENUMS(AuthAccess)
+    Q_ENUMS(Constants)
 
 public:
-    static YubiKey* get(const QByteArray);
-    void put() { unref(); }
+    enum Constants {
+        TotpPeriod = YubiKeyConstants::TOTP_PERIOD_SEC,
+        DefaultDigits = YubiKeyToken::DefaultDigits,
+        MinDigits = YubiKeyToken::MinDigits,
+        MaxDigits = YubiKeyToken::MaxDigits,
 
-    YubiKey* ref();
-    void unref();
+        HMAC_SHA1 = YubiKeyAlgorithm_HMAC_SHA1,
+        HMAC_SHA256 = YubiKeyAlgorithm_HMAC_SHA256,
+        HMAC_SHA512 = YubiKeyAlgorithm_HMAC_SHA512,
 
-    const QByteArray yubiKeyId() const;
-    const QByteArray otpList() const;
-    const QByteArray otpData() const;
-    bool otpListFetched() const;
-    bool present() const;
-    YubiKeyAuthAccess authAccess() const;
+        TypeUnknown = YubiKeyTokenType_Unknown,
+        TypeHOTP = YubiKeyTokenType_HOTP,
+        TypeTOTP = YubiKeyTokenType_TOTP,
+
+        // YubiKey firmware versions
+        Version_5_3_0 = 0x050300,
+
+        // Error codes
+        Success = YubiKeyConstants::RC_OK,
+        ErrorNoSpace = YubiKeyConstants::RC_NO_SPACE
+    };
+
+    enum AuthAccess {
+        AccessUnknown = YubiKeyAuthAccessUnknown,
+        AccessNotActivated = YubiKeyAuthAccessNotActivated,
+        AccessOpen = YubiKeyAuthAccessOpen,
+        AccessGranted = YubiKeyAuthAccessGranted,
+        AccessDenied = YubiKeyAuthAccessDenied
+    };
+
+    YubiKey(QObject* aParent = Q_NULLPTR);
+    ~YubiKey();
+
+    YubiKeyIo* yubiKeyIo() const;
+    void setYubiKeyIo(YubiKeyIo*);
+
+    QByteArray yubiKeyId() const;
+    QString yubiKeyIdString() const;
     uint yubiKeySerial() const;
     uint yubiKeyVersion() const;
+    QString yubiKeyVersionString() const;
+    AuthAccess authAccess() const;
+    QList<YubiKeyOtp> otpList() const;
+    bool otpListFetched() const;
+    bool present() const;
+    bool updatingPasswords() const;
+    bool haveTotpCodes() const;
+    bool haveBeenReset() const;
+    qreal totpTimeLeft() const;
 
-    const QString yubiKeyIdString() const;
-    const QString yubiKeyVersionString() const;
-    const QString otpListString() const;
-    const QString otpDataString() const;
-    const QStringList refreshableTokens() const;
-    const QList<int> operationIds() const;
-    bool totpValid() const;
-    int totpTimeLeft() const; // seconds
+    Q_INVOKABLE void clear();
+    Q_INVOKABLE void authorize(QString, bool);
+    Q_INVOKABLE bool cancelOp(int);
+    Q_INVOKABLE YubiKeyOp* getOp(int);
+    Q_INVOKABLE YubiKeyOp* reset();
+    Q_INVOKABLE YubiKeyOp* clearPassword();
+    Q_INVOKABLE YubiKeyOp* setPassword(QString);
+    Q_INVOKABLE YubiKeyOp* putToken(int, int, const QString, const QString, int, int);
+    Q_INVOKABLE QList<int> putTokens(QList<YubiKeyToken>);
 
-    int putTokens(const QList<YubiKeyToken>);
-    int renameToken(const QString, const QString);
-    bool submitPassword(const QString, bool);
-    void refreshTokens(const QStringList);
-    void deleteTokens(const QStringList);
-    int setPassword(const QString);
-    int reset();
+    YubiKeyOp* refreshToken(QByteArray);
+    YubiKeyOp* deleteToken(QByteArray, YubiKeyOp::OpData* aData = Q_NULLPTR);
+    YubiKeyOp* renameToken(QByteArray, QByteArray, YubiKeyOp::OpData* aData = Q_NULLPTR);
+    void listAndCalculateAll();
 
 Q_SIGNALS:
-    void yubiKeyReset();
+    void yubiKeyIoChanged();
+    void yubiKeyIdChanged();
     void yubiKeySerialChanged();
     void yubiKeyVersionChanged();
-    void otpListFetchedChanged();
-    void otpListChanged();
-    void otpDataChanged();
-    void presentChanged();
     void authAccessChanged();
-    void refreshableTokensChanged();
-    void totpValidChanged();
+    void otpListChanged();
+    void otpListFetchedChanged();
+    void presentChanged();
+    void updatingPasswordsChanged();
+    void haveTotpCodesChanged();
+    void haveBeenResetChanged();
     void totpTimeLeftChanged();
-    void operationIdsChanged();
-    void operationFinished(int, bool);
-    void accessKeyNotAccepted();
-    void totpCodesExpired();
-    void passwordChanged();
-    void passwordRemoved();
-    void tokenRenamed(QString, QString);
-    void putFailed(YubiKeyToken, uint);
+    void yubiKeyConnected();
+    void yubiKeyValidationFailed();
+    void invalidYubiKeyConnected();
+    void restrictedYubiKeyConnected();
 
 private:
     class Private;

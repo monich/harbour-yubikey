@@ -5,13 +5,19 @@ import harbour.yubikey 1.0
 Dialog {
     id: thisDialog
 
-    canAccept: ((type !== YubiKeyCard.TypeHOTP) || counterField.acceptableInput) && digitsField.acceptableInput && _acceptableSecret && label !== ""
+    canAccept: ((type !== YubiKey.TypeHOTP) || counterField.acceptableInput) && digitsField.acceptableInput && _acceptableSecret && label !== ""
+    //: Dialog title
+    //% "Add token"
+    dialogTitle: qsTrId("yubikey-add_token-title")
+    //: Dialog button
+    //% "Save"
+    acceptText: qsTrId("yubikey-add_token-save")
 
     property string yubiKeyId
     property alias dialogTitle: header.title
     property alias acceptText: header.acceptText
-    property int type: YubiKeyCard.TypeTOTP
-    property int algorithm: YubiKeyCard.HMAC_SHA1
+    property int type: YubiKey.TypeTOTP
+    property int algorithm: YubiKey.HMAC_SHA1
     property alias label: labelField.text
     property alias secret: secretField.text
     property alias digits: digitsField.text
@@ -83,10 +89,10 @@ Dialog {
                     //: Text field placeholder (number of password digits)
                     //% "Number of password digits"
                     placeholderText: qsTrId("yubikey-token-digits-placeholder")
-                    text: YubiKeyUtil.DefaultDigits
+                    text: YubiKey.DefaultDigits
                     validator: IntValidator {
-                        bottom: YubiKeyUtil.MinDigits
-                        top: YubiKeyUtil.MaxDigits
+                        bottom: YubiKey.MinDigits
+                        top: YubiKey.MaxDigits
                     }
 
                     EnterKey.iconSource: "image://theme/icon-m-enter-next"
@@ -95,7 +101,7 @@ Dialog {
 
                 Item {
                     width: parent.columnWidth
-                    height: (type === YubiKeyCard.TypeHOTP) ? counterField.height : 0
+                    height: (type === YubiKey.TypeHOTP) ? counterField.height : 0
                     visible: height > 0
                     clip: true
 

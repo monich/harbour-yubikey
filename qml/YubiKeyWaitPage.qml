@@ -5,60 +5,80 @@ import harbour.yubikey 1.0
 Page {
     id: thisPage
 
-    property alias yubiKeyId: yubiKey.yubiKeyId
     property alias text: label.text
-    property var complete
-    property Page destinationPage
+    property bool yubiKeyPresent
+    property alias extraContent: extraContentPlaceholder
+    property alias busy: icon.busy
+    property alias busyProgress: icon.busyProgress
+    property alias progressValue: icon.progressValue
 
-    backNavigation: !NfcAdapter.targetPresent
+    signal activated()
 
-    signal accessKeyNotAccepted()
-    signal waitDone(var keyState, var waitId, var success)
+    // Using full height for layout purposes, the actual page height may be
+    // initially smaller if we are transitioning from the page which had VKB
+    // open (which squeezes the page vertically)
+    readonly property int _landscapeHeight: Screen.width
+    readonly property int _portraitHeight: Screen.height
+    property bool _popRequsted
+    property bool _invalidYubiKey
+    readonly property bool transitionInProgress: pageStack.currentPage &&
+        (pageStack.currentPage.status === PageStatus.Activating ||
+         pageStack.currentPage.status === PageStatus.Deactivating)
 
-    property bool _done
-    property int _waitId
-
-    function tryAgain() {
-        _done = false
+    function goBack()
+    {
+        // Avoid [D] doPop:492 - Warning: cannot pop while transition is in progress
+        if (transitionInProgress) {
+            popTimer.stop()
+            _popRequsted = true
+        } else {
+            _popRequsted = false
+            popTimer.start()
+        }
     }
 
-    function waitForId(waitId) {
-        _done = false
-        _waitId = waitId
+    function invalidYubiKeyConnected() {
+        _invalidYubiKey = true
+        if (yubiKeyPresent) {
+            invalidYubiKeyPopup.show(false)
+        }
     }
 
-    YubiKeyCard {
-        id: yubiKey
+    onTransitionInProgressChanged: {
+        if (!transitionInProgress && _popRequsted) {
+            _popRequsted = false
+            popTimer.start()
+        }
+    }
 
-        onAccessKeyNotAccepted: thisPage.accessKeyNotAccepted()
-        onYubiKeyStateChanged: {
-            if (!_done && !_waitId && (yubiKeyState === YubiKeyCard.YubiKeyStateReady ||
-                yubiKeyState === YubiKeyCard.YubiKeyStateUnauthorized)) {
-                done(false)
-            }
+    onStatusChanged: {
+        if (status === PageStatus.Active) {
+            backNavigation = Qt.binding(function() { return !yubiKeyPresent })
+            showNavigationIndicator = Qt.binding(function() { return backNavigation })
+            thisPage.activated()
         }
-        onOperationIdsChanged: {
-            if (!_done && _waitId && !validOperationId(_waitId)) {
-                done(false)
-            }
-        }
-        onOperationFinished: {
-            if (!_done && _waitId === operationId) {
-                done(success)
-            }
-        }
+    }
 
-        function done(success) {
-            var waitId = _waitId
-            _waitId = 0
-            _done = true
-            thisPage.waitDone(yubiKeyState, waitId, success)
-            if (complete) {
-                complete(thisPage, yubiKeyState, waitId, success)
+    onYubiKeyPresentChanged: {
+        if (yubiKeyPresent) {
+            // Typically invalidYubiKeyConnected comes before yubiKeyPresent
+            // turns true, but let's handle the case if it happens the other
+            // way around
+            if (_invalidYubiKey) {
+                invalidYubiKeyPopup.show(false)
             }
-            if (_done && status === PageStatus.Active) {
-                pageStack.pop(destinationPage)
-            }
+        } else {
+            _invalidYubiKey = false
+        }
+    }
+
+    Timer {
+        id: popTimer
+
+        interval: 0
+        onTriggered: {
+            backNavigation = true
+            pageStack.pop(pageStack.previousPage(thisPage), PageStackAction.Animated)
         }
     }
 
@@ -69,20 +89,43 @@ Page {
             id: icon
 
             anchors.centerIn: parent
-            busy: true
+            busy: !yubiKeyPresent
+            invertColors: false
+            progressValue: 1
         }
     }
 
     Item {
-        id: labelContainer
+        id: contentContainer
 
         anchors.right: parent.right
 
         InfoLabel {
             id: label
 
-            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - Theme.horizontalPageMargin - x
         }
+    }
+
+    // extraContentPlaceholder fills the space below the prompt (excluding some margins)
+    Item {
+        id: extraContentPlaceholder
+
+        x: contentContainer.x + label.x
+        y: contentContainer.y + label.y + label.height + Theme.paddingLarge
+        width: label.width
+        height: contentContainer.y + contentContainer.height - y - Theme.paddingLarge
+    }
+
+    YubiKeyPopup {
+        id: invalidYubiKeyPopup
+
+        //: Wait page popup (the touched YubiKey is not the one we are waiting for)
+        //% "Wrong YubiKey"
+        text: qsTrId("yubikey-popup-wrong_touch")
+        iconSource: "images/yubikey-question.svg"
+        isPortrait: thisPage.isPortrait
+        autoHide: !yubiKeyPresent
     }
 
     states: [
@@ -90,23 +133,32 @@ Page {
             name: "portrait"
             when: isPortrait
             changes: [
+                AnchorChanges {
+                    target: contentContainer
+                    anchors {
+                        top: iconContainer.bottom
+                        left: parent.left
+                    }
+                },
+                AnchorChanges {
+                    target: label
+                    anchors {
+                        top: parent.top
+                        verticalCenter: undefined
+                    }
+                },
                 PropertyChanges {
                     target: iconContainer
                     width: parent.width
                     height: icon.height + 2 * Theme.itemSizeLarge
                 },
-                AnchorChanges {
-                    target: labelContainer
-                    anchors.left: parent.left
-                },
                 PropertyChanges {
-                    target: labelContainer
-                    y: iconContainer.y + iconContainer.height
-                    height: Screen.height - y
+                    target: contentContainer
+                    height: _portraitHeight - iconContainer.y - iconContainer.height
                 },
                 PropertyChanges {
                     target: label
-                    anchors.verticalCenterOffset: - label.height
+                    horizontalAlignment: Text.AlignHCenter
                 }
             ]
         },
@@ -114,23 +166,33 @@ Page {
             name: "landscape"
             when: !isPortrait
             changes: [
+                AnchorChanges {
+                    target: contentContainer
+                    anchors {
+                        top: parent.top
+                        left: iconContainer.right
+                    }
+                },
+                AnchorChanges {
+                    target: label
+                    anchors {
+                        top: undefined
+                        verticalCenter: parent.verticalCenter
+                    }
+                },
                 PropertyChanges {
                     target: iconContainer
                     width: icon.width + 2 * Theme.itemSizeLarge
-                    height: Screen.width
-                },
-                AnchorChanges {
-                    target: labelContainer
-                    anchors.left: iconContainer.right
+                    height: _landscapeHeight
                 },
                 PropertyChanges {
-                    target: labelContainer
-                    y: 0
-                    height: Screen.width
+                    target: contentContainer
+                    height: _landscapeHeight
                 },
                 PropertyChanges {
                     target: label
-                    anchors.verticalCenterOffset: 0
+                    x: 0
+                    horizontalAlignment: Text.AlignLeft
                 }
             ]
         }

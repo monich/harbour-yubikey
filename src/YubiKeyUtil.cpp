@@ -37,7 +37,8 @@
  * any official policies, either expressed or implied.
  */
 
-#include "gutil_misc.h"
+#include <foil_random.h>
+#include <gutil_misc.h>
 
 #include "YubiKeyDefs.h"
 #include "YubiKeyUtil.h"
@@ -46,19 +47,98 @@
 #include "HarbourBase32.h"
 #include "HarbourDebug.h"
 
-#include <QtCore/QStandardPaths>
 #include <QtCore/QCryptographicHash>
+#include <QtCore/QStandardPaths>
+#include <QtCore/QVector>
+
+// ==========================================================================
+// YubiKeyUtil::SelectResponse
+// ==========================================================================
+
+YubiKeyUtil::SelectResponse::SelectResponse() :
+    authAlg(YubiKeyAlgorithm_Unknown)
+{}
+
+bool
+YubiKeyUtil::SelectResponse::parse(
+    const QByteArray& aResp)
+{
+    GUtilRange resp;
+    GUtilData data;
+    uchar t;
+    bool ok = true;
+    QVector<uchar> seenTags;
+
+    initRange(resp, aResp);
+    clear();
+
+    while ((t = readTLV(&resp, &data)) != 0) {
+        if (seenTags.contains(t)) {
+            HWARN("Duplicate SELECT tag" << hex << t);
+            ok = false;
+        } else {
+            switch (t) {
+            case YubiKeyConstants::TLV_TAG_ALG:
+                if (data.size == 1) {
+                    authAlg = algorithmFromValue(data.bytes[0]);
+                    HDEBUG("Algorithm:" << authAlg);
+                } else {
+                    ok = false;
+                }
+                break;
+            case YubiKeyConstants::TLV_TAG_NAME:
+                seenTags.append(t);
+                cardId = toByteArray(&data);
+                HDEBUG("Id:" << cardId.toHex().constData());
+                break;
+            case YubiKeyConstants::TLV_TAG_VERSION:
+                seenTags.append(t);
+                version = toByteArray(&data);
+                HDEBUG("Version:" << version.toHex().constData());
+                break;
+            case YubiKeyConstants::TLV_TAG_CHALLENGE:
+                seenTags.append(t);
+                authChallenge = toByteArray(&data);
+                HDEBUG("Challenge:" << authChallenge.toHex().constData());
+                break;
+            default:
+                HDEBUG("Unhandled tag" << hex << t);
+                continue;
+            }
+
+            // Remember that we have seen this tag
+            seenTags.reserve(4);
+            seenTags.append(t);
+        }
+    }
+
+    return ok && resp.ptr == resp.end;
+}
+
+bool
+YubiKeyUtil::SelectResponse::isValid() const
+{
+    return !cardId.isEmpty() && !version.isEmpty();
+}
+
+void
+YubiKeyUtil::SelectResponse::clear()
+{
+    authAlg = YubiKeyAlgorithm_Unknown;
+    cardId.clear();
+    version.clear();
+    authChallenge.clear();
+}
+
+// ==========================================================================
+// YubiKeyUtil::Private
+// ==========================================================================
 
 class YubiKeyUtil::Private
 {
 public:
     static QList<YubiKeyAlgorithm> allAlgorithms();
 };
-
-const QString YubiKeyUtil::ALGORITHM_SHA1("SHA1");
-const QString YubiKeyUtil::ALGORITHM_SHA256("SHA256");
-const QString YubiKeyUtil::ALGORITHM_SHA512("SHA512");
-const QList<YubiKeyAlgorithm> YubiKeyUtil::AllAlgorithms(Private::allAlgorithms());
 
 QList<YubiKeyAlgorithm>
 YubiKeyUtil::Private::allAlgorithms()
@@ -72,24 +152,42 @@ YubiKeyUtil::Private::allAlgorithms()
     return list;
 }
 
+// ==========================================================================
+// YubiKeyUtil
+// ==========================================================================
+
+const QString YubiKeyUtil::ALGORITHM_SHA1("SHA1");
+const QString YubiKeyUtil::ALGORITHM_SHA256("SHA256");
+const QString YubiKeyUtil::ALGORITHM_SHA512("SHA512");
+const QList<YubiKeyAlgorithm> YubiKeyUtil::AllAlgorithms(Private::allAlgorithms());
+
 QDir
 YubiKeyUtil::configDir(
     const QByteArray& aYubiKeyId)
 {
-    static const QDir configRoot(QStandardPaths::writableLocation(
-        QStandardPaths::GenericDataLocation) + "/" YUBIKEY_APP_NAME);
+    static const QDir configRoot(QDir(QStandardPaths::writableLocation(
+        QStandardPaths::GenericDataLocation)).
+        absoluteFilePath(YUBIKEY_APP_NAME));
 
-    return QDir(configRoot.absoluteFilePath(HarbourUtil::toHex(aYubiKeyId)));
+    return QDir(configRoot.filePath(HarbourUtil::toHex(aYubiKeyId)));
 }
 
-QString
+void
+YubiKeyUtil::initRange(
+    GUtilRange& aRange,
+    const QByteArray& aBytes)
+{
+    aRange.end = (aRange.ptr = (uchar*) aBytes.constData()) + aBytes.size();
+}
+
+QByteArray
 YubiKeyUtil::hashUtf8(
     const QByteArray& aUtf8)
 {
-    return QCryptographicHash::hash(aUtf8, QCryptographicHash::Sha1).toHex();
+    return QCryptographicHash::hash(aUtf8, QCryptographicHash::Sha1);
 }
 
-QString
+QByteArray
 YubiKeyUtil::steamHashUtf8(
     const QByteArray& aUtf8)
 {
@@ -98,7 +196,26 @@ YubiKeyUtil::steamHashUtf8(
     QCryptographicHash hash(QCryptographicHash::Sha1);
     hash.addData(STEAM_PREFIX);
     hash.addData(aUtf8);
-    return hash.result().toHex();
+    return hash.result();
+}
+
+QByteArray
+YubiKeyUtil::nameToUtf8(
+    QString aName)
+{
+    // Length of name data is limited to 64 bytes
+    static const int MaxNameSize = 64;
+    QByteArray utf8(aName.toUtf8());
+
+    if (utf8.size() > MaxNameSize) {
+        QString name(aName);
+
+        do {
+            name.truncate(name.length() - 1);
+            utf8 = name.toUtf8();
+        } while (utf8.size() > MaxNameSize);
+    }
+    return utf8;
 }
 
 uint
@@ -189,30 +306,6 @@ YubiKeyUtil::readTLV(
     }
 }
 
-void
-YubiKeyUtil::appendTLV(
-    QByteArray* aTlv,
-    uchar aTag,
-    const QByteArray aValue)
-{
-    HASSERT(aValue.size() <= 0xff);
-    aTlv->append((char)aTag);
-    aTlv->append((char)aValue.size());
-    aTlv->append(aValue);
-}
-
-void
-YubiKeyUtil::appendTLV(
-    QByteArray* aTlv,
-    uchar aTag,
-    uchar aLength,
-    const void* aValue)
-{
-    aTlv->append((char)aTag);
-    aTlv->append((char)aLength);
-    aTlv->append((const char*)aValue, aLength);
-}
-
 const QString
 YubiKeyUtil::algorithmName(
     YubiKeyAlgorithm aAlgorithm)
@@ -293,6 +386,12 @@ YubiKeyUtil::validType(
     return YubiKeyTokenType_Unknown;
 }
 
+QByteArray
+YubiKeyUtil::randomAuthChallenge()
+{
+    return toByteArray(foil_random_bytes(YubiKeyConstants::CHALLENGE_LEN));
+}
+
 bool
 YubiKeyUtil::isValidBase32(
     const QString& aBase32)
@@ -342,6 +441,7 @@ operator<<(
 {
     switch (aAccess) {
     case YubiKeyAuthAccessUnknown: return (aDebug << "AccessUnknown");
+    case YubiKeyAuthAccessNotActivated: return (aDebug << "AccessNotActivated");
     case YubiKeyAuthAccessOpen: return (aDebug << "AccessOpen");
     case YubiKeyAuthAccessDenied: return (aDebug << "AccessDenied");
     case YubiKeyAuthAccessGranted: return (aDebug << "AccessGranted");

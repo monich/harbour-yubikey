@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023-2026 Slava Monich <slava@monich.com>
+ * Copyright (C) 2026 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -36,50 +36,73 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_SETTINGS_H
-#define _YUBIKEY_SETTINGS_H
+#ifndef _YUBIKEY_OP_H
+#define _YUBIKEY_OP_H
 
-#include <QtCore/QByteArrayList>
 #include <QtCore/QObject>
 
-class YubiKeySettings :
+// An asynchronous operation. Operation can be queued and get submitted
+// in the order they have been queued (considering the priorities).
+// YubiKeyOps are owned by YubiKeyOpQueue.
+//
+// State diagram:
+//
+//                      START
+//                      =====
+//                        |
+//                        V
+//                   +----------+
+//                   | OpQueued | ----------+
+//                   +----------+           |
+//                     |      ^             |
+//                     V      |             V
+// +----------+      +----------+     +-------------+
+// | OpFailed | <--- | OpActive | --> | OpCancelled |
+// +----------+      +----------+     +-------------+
+//                        |
+//                        V
+//                  +------------+
+//                  | OpFinished |
+//                  +------------+
+//
+class YubiKeyOp :
     public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(int opId READ opId CONSTANT)
+    Q_PROPERTY(int opState READ opState NOTIFY opStateChanged)
+    Q_ENUMS(OpState)
 
 public:
-    YubiKeySettings(QByteArray);
-    YubiKeySettings(const YubiKeySettings&);
-    YubiKeySettings();
-    ~YubiKeySettings();
+    enum OpState {
+        OpQueued,
+        OpActive,
+        OpCancelled,
+        OpFinished,
+        OpFailed
+    };
 
-    YubiKeySettings& operator = (const YubiKeySettings&);
+    class OpData
+    {
+        Q_DISABLE_COPY(OpData)
+    public:
+        OpData();
+        virtual ~OpData();
+    };
 
-    bool isValid() const;
+    virtual OpData* opData() const = 0;
+    virtual OpState opState() const = 0;
+    virtual int opId() const = 0;
+    virtual void opCancel() = 0;
 
-    QByteArray yubiKeyId() const;
-    QByteArray favoriteHash() const;
-    void setFavoriteHash(QByteArray);
-    bool isFavoriteHash(QByteArray) const;
-    bool isFavoriteName(QString) const;
-    void setFavoriteName(QString);
-    void clearFavorite();
-
-    QByteArrayList steamHashes() const;
-    bool isSteamHash(QByteArray) const;
-    void setSteamHashes(QByteArrayList);
-    void addSteamHash(QByteArray);
-    void removeSteamHash(QByteArray);
-
-    void tokenRenamed(QString, QString);
+    bool isDone() const;
 
 Q_SIGNALS:
-    void favoriteHashChanged();
-    void steamHashesChanged();
+    void opFinished(uint, QByteArray);
+    void opStateChanged();
 
-private:
-    class Private;
-    Private* iPrivate;
+protected:
+    YubiKeyOp(QObject*);
 };
 
-#endif // _YUBIKEY_SETTINGS_H
+#endif // _YUBIKEY_OP_H

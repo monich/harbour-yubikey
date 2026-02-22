@@ -40,7 +40,7 @@
 #ifndef _YUBIKEY_UTIL_H
 #define _YUBIKEY_UTIL_H
 
-#include "foil_types.h"
+#include <foil_types.h>
 
 #include "YubiKeyConstants.h"
 #include "YubiKeyToken.h"
@@ -65,14 +65,14 @@ class YubiKeyUtil:
     class Private;
 
 public:
-    // Expose some constants to QML
-    enum Constants {
-        DefaultDigits = YubiKeyToken::DefaultDigits,
-        MinDigits = YubiKeyToken::MinDigits,
-        MaxDigits = YubiKeyToken::MaxDigits,
+    struct SelectResponse {
+        YubiKeyAlgorithm authAlg;
+        QByteArray cardId, version, authChallenge;
 
-        // Error codes
-        ErrorNoSpace = YubiKeyConstants::RC_NO_SPACE
+        SelectResponse();
+        bool parse(const QByteArray&);
+        bool isValid() const;
+        void clear();
     };
 
     static const QString ALGORITHM_SHA1;
@@ -82,12 +82,14 @@ public:
 
     static QDir configDir(const QByteArray&);
 
-    static QString hashUtf8(const QByteArray&);
-    static QString steamHashUtf8(const QByteArray&);
-    static QString steamNameHash(const QString& aName)
+    static void initRange(GUtilRange&, const QByteArray&);
+    static QByteArray hashUtf8(const QByteArray&);
+    static QByteArray steamHashUtf8(const QByteArray&);
+    static QByteArray steamNameHash(const QString& aName)
         { return steamHashUtf8(aName.toUtf8()); }
-    static QString nameHash(const QString& aName)
+    static QByteArray nameHash(const QString& aName)
         { return hashUtf8(aName.toUtf8()); }
+    static QByteArray nameToUtf8(QString);
 
     static uint versionToNumber(const uchar*, gsize);
     static inline uint versionToNumber(const QByteArray& aData)
@@ -106,16 +108,15 @@ public:
         { return HarbourUtil::toHex(aData->bytes, aData->size); }
 
     static uchar readTLV(GUtilRange*, GUtilData*);
-    static void appendTLV(QByteArray*, uchar, const QByteArray);
-    static void appendTLV(QByteArray*, uchar, uchar, const void*);
 
     static const QString algorithmName(YubiKeyAlgorithm);
     static uchar algorithmValue(YubiKeyAlgorithm);
     static YubiKeyAlgorithm algorithmFromName(const QString&);
     static YubiKeyAlgorithm algorithmFromValue(uchar);
     static YubiKeyAlgorithm validAlgorithm(int);
-
     static YubiKeyTokenType validType(int);
+
+    static QByteArray randomAuthChallenge();
 
     Q_INVOKABLE static bool isValidBase32(const QString&);
 

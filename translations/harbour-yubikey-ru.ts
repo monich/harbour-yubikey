@@ -23,16 +23,6 @@
         <extracomment>Pop-up notification</extracomment>
         <translation>Пароль скопирован в буфер обмена</translation>
     </message>
-    <message id="yubikey-notification-put_error">
-        <source>Failed to add %1 (%2)</source>
-        <extracomment>Pop-up notification (%1 if the token label, %2 is the error message/code)</extracomment>
-        <translation>Не удалось сохранить %1 (%2)</translation>
-    </message>
-    <message id="yubikey-error-no_space">
-        <source>No space</source>
-        <extracomment>Error message (No space)</extracomment>
-        <translation>место закончилось</translation>
-    </message>
     <message id="yubikey-menu-add_token">
         <source>Add token</source>
         <extracomment>Pulley menu item</extracomment>
@@ -103,6 +93,16 @@
         <extracomment>Context menu item</extracomment>
         <translation>Пароль Steam</translation>
     </message>
+    <message id="yubikey-menu-delete_remorse">
+        <source>Deleting</source>
+        <extracomment>Remorse popup text</extracomment>
+        <translation>Удаление</translation>
+    </message>
+    <message id="yubikey-remorse-clearing_password">
+        <source>Clearing YubiKey password</source>
+        <extracomment>Remorse popup text</extracomment>
+        <translation>Сброс пароля</translation>
+    </message>
     <message id="yubikey-status-waiting_to_reset">
         <source>Touch the same YubiKey to reset it</source>
         <extracomment>Status label</extracomment>
@@ -112,6 +112,11 @@
         <source>Touch the same YubiKey to validate the password</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для подтверждения пароля</translation>
+    </message>
+    <message id="yubikey-status-validating_password">
+        <source>Validating the password</source>
+        <extracomment>Status label</extracomment>
+        <translation>Проверка пароля</translation>
     </message>
     <message id="yubikey-info-nfc_not_supported">
         <source>NFC not supported</source>
@@ -128,15 +133,15 @@
         <extracomment>Hint label</extracomment>
         <translation>Поднесите YubiKey с поддержкой NFC и возможно что-то произойдёт</translation>
     </message>
-    <message id="yubikey-info-version">
-        <source>Version: %1</source>
-        <extracomment>Card info label</extracomment>
-        <translation>Версия: %1</translation>
-    </message>
     <message id="yubikey-info-serial">
         <source>Serial: %1</source>
         <extracomment>Card info label</extracomment>
         <translation>Серийный номер: %1</translation>
+    </message>
+    <message id="yubikey-info-firmware">
+        <source>Firmware: %1</source>
+        <extracomment>Card info label</extracomment>
+        <translation>Прошивка: %1</translation>
     </message>
     <message id="yubikey-info-no_creds">
         <source>No credentials are stored on this YubiKey</source>
@@ -159,14 +164,9 @@
         <translation>Введите новый пароль для этого YubiKey</translation>
     </message>
     <message id="yubikey-info-enter_password-set_prompt">
-        <source>Enter password to set for this YubiKey</source>
+        <source>Enter password for this YubiKey</source>
         <extracomment>Input prompt (there was no password, creating one)</extracomment>
         <translation>Введите пароль для этого YubiKey</translation>
-    </message>
-    <message id="yubikey-button-enter_password">
-        <source>Enter</source>
-        <extracomment>Button label</extracomment>
-        <translation>Ввод</translation>
     </message>
     <message id="yubikey-confirm_password-description">
         <source>Make sure you don&apos;t forget your password. It&apos;s impossible to either recover it or to access the tokens stored on YubiKey without knowing it. You will still be able to reset your YubiKey though, and start from scratch.</source>
@@ -177,16 +177,6 @@
         <source>New password again</source>
         <extracomment>Placeholder for the password confirmation prompt</extracomment>
         <translation>Новый пароль ещё раз</translation>
-    </message>
-    <message id="yubikey-confirm_password-label">
-        <source>New password</source>
-        <extracomment>Label for the password confirmation prompt</extracomment>
-        <translation>Новый пароль</translation>
-    </message>
-    <message id="yubikey-confirm_password-button">
-        <source>Confirm</source>
-        <extracomment>Button label (confirm password)</extracomment>
-        <translation>Подтвердить</translation>
     </message>
     <message id="yubikey-wait-change_password">
         <source>Touch the same YubiKey to change the password</source>
@@ -204,14 +194,19 @@
         <translation>Поднесите тот же самый YubiKey для сброса пароля</translation>
     </message>
     <message id="yubikey-wait-put_token">
-        <source>Touch YubiKey to save the token</source>
+        <source>Touch the same YubiKey to save the token</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для записи кода</translation>
     </message>
     <message id="yubikey-wait-put_selected_tokens">
-        <source>Touch YubiKey to save the selected tokens</source>
+        <source>Touch the same YubiKey to save the selected tokens</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для записи выбранных кодов</translation>
+    </message>
+    <message id="yubikey-wait-saving_tokens">
+        <source>Saving the tokens...</source>
+        <extracomment>Status label</extracomment>
+        <translation>Сохраняем код...</translation>
     </message>
     <message id="yubikey-add_token-save">
         <source>Save</source>
@@ -285,7 +280,7 @@
     </message>
     <message id="yubikey-remember_password-description">
         <source>The password is stored in a hashed form from which the original password cannot be recovered. However, this hashed form can still be copied and used for accessing your key even without knowing the original password. By choosing to store the password, you accept that risk.</source>
-        <extracomment>Switch label</extracomment>
+        <extracomment>Switch description</extracomment>
         <translation>Пароль хранится в форме, из которой невозможно восстановить оригинальный пароль. Однако и этой формы очевидно достаточно для того, чтобы получить доступ к вашему ключу, так что если она попадёт не в те руки, то извините. Сохраняя пароль, вы берёте на себя этот риск.</translation>
     </message>
     <message id="yubikey-confirm_password-prompt-change">
@@ -298,25 +293,15 @@
         <extracomment>Input prompt</extracomment>
         <translation>Введите пароль доступа к YubiKey ещё раз</translation>
     </message>
-    <message id="yubikey-enter_password-placeholder">
-        <source>New password</source>
-        <extracomment>Placeholder for the new password field</extracomment>
-        <translation>Новый пароль</translation>
+    <message id="yubikey-confirm_password-match-label">
+        <source>Passwords match</source>
+        <extracomment>Label for the password confirmation prompt</extracomment>
+        <translation>Ура, совпало</translation>
     </message>
-    <message id="yubikey-enter_password-label">
-        <source>New password</source>
-        <extracomment>Label for the new password field</extracomment>
-        <translation>Новый пароль</translation>
-    </message>
-    <message id="yubikey-enter_password-button">
-        <source>Enter</source>
-        <extracomment>Button label (enter new password)</extracomment>
-        <translation>Ввод</translation>
-    </message>
-    <message id="yubikey-item-touch_to_delete">
-        <source>Touch YubiKey to delete this token</source>
-        <extracomment>List item text</extracomment>
-        <translation>Поднесите YubiKey чтобы удалить этот код</translation>
+    <message id="yubikey-confirm_password-mismatch-label">
+        <source>Passwords don&apos;t match</source>
+        <extracomment>Label for the password confirmation prompt</extracomment>
+        <translation>Пароль не совпал</translation>
     </message>
     <message id="yubikey-scan-title">
         <source>Scan QR code</source>
@@ -346,32 +331,102 @@
     <message id="yubikey-select_dialog-title">
         <source>Select tokens</source>
         <extracomment>Dialog title</extracomment>
-        <translation>Выберите коды для записи на ключ</translation>
+        <translation>Выберите коды для записи на YubiKey</translation>
+    </message>
+    <message id="yubikey-confirm_password-back-button">
+        <source>Back</source>
+        <extracomment>Button label (confirm password)</extracomment>
+        <translation>Назад</translation>
+    </message>
+    <message id="yubikey-confirm_password-accept-button">
+        <source>Confirm</source>
+        <extracomment>Button label (confirm password)</extracomment>
+        <translation>Подтвердить</translation>
+    </message>
+    <message id="yubikey-rename_token-accept-button">
+        <source>Rename</source>
+        <extracomment>Button label (rename token)</extracomment>
+        <translation>Переименовать</translation>
     </message>
     <message id="yubikey-rename_token-prompt">
-        <source>Enter new name for %1</source>
+        <source>Enter a new name</source>
         <extracomment>Input prompt to rename the token</extracomment>
-        <translation>Введите новое имя вместо %1</translation>
+        <translation>Введите новое имя</translation>
     </message>
     <message id="yubikey-rename_token-placeholder">
-        <source>Enter new name</source>
+        <source>New name</source>
         <extracomment>Placeholder for the new token name</extracomment>
-        <translation>Введите новое имя</translation>
+        <translation>Новое имя</translation>
     </message>
     <message id="yubikey-rename_token-duplicate_name">
         <source>Duplicate name</source>
         <extracomment>Label for a duplicate token name</extracomment>
         <translation>Такое имя уже есть</translation>
     </message>
-    <message id="yubikey-rename_token-button">
-        <source>Rename</source>
-        <extracomment>Button label (rename token)</extracomment>
-        <translation>Переименовать</translation>
+    <message id="yubikey-not_activated-info_label_1">
+        <source>Connect your YubiKey to any USB power source, such as a computer, for at least 3 seconds.</source>
+        <extracomment>Info label</extracomment>
+        <translation>Подключите YubiKey к любому USB-источнику питания, например к компьютеру, не менее чем на 3 секунды.</translation>
     </message>
-    <message id="yubikey-wait-rename_token">
-        <source>Touch the same YubiKey to rename the token</source>
-        <extracomment>Status label</extracomment>
-        <translation>Поднесите тот же самый YubiKey для сохранения изменений</translation>
+    <message id="yubikey-not_activated-info_label_2">
+        <source>Once powered, NFC will be activated and ready for use.</source>
+        <extracomment>Info label</extracomment>
+        <translation>После подключения NFC будет активирован и готов к использованию.</translation>
+    </message>
+    <message id="yubikey-error-no_space">
+        <source>No space left</source>
+        <extracomment>Error message (No space left on YubiKey)</extracomment>
+        <translation>Место кончилось</translation>
+    </message>
+    <message id="yubikey-popup-wrong_touch">
+        <source>Wrong YubiKey</source>
+        <extracomment>Wait page popup (the touched YubiKey is not the one we are waiting for)</extracomment>
+        <translation>Не тот YubiKey</translation>
+    </message>
+    <message id="yubikey-popup-clear_password_success">
+        <source>YubiKey password has been removed</source>
+        <extracomment>Pop-up notification</extracomment>
+        <translation>Пароль с YubiKey снят, теперь им может воспользоваться кто угодно</translation>
+    </message>
+    <message id="yubikey-popup-change_password_success">
+        <source>YubiKey password has been changed</source>
+        <extracomment>Pop-up notification</extracomment>
+        <translation>Пароль для доступа к YubiKey изменён</translation>
+    </message>
+    <message id="yubikey-popup-set_password_success">
+        <source>YubiKey has been password protected</source>
+        <extracomment>Pop-up notification</extracomment>
+        <translation>Теперь YubiKey защищён паролем, ура!</translation>
+    </message>
+    <message id="yubikey-popup-put_token_success">
+        <source>Saved %1</source>
+        <extracomment>Pop-up notification (%1 is the token label)</extracomment>
+        <translation>%1 сохранён</translation>
+    </message>
+    <message id="yubikey-popup-put_token_error">
+        <source>Failed to save %1 (%2)</source>
+        <extracomment>Pop-up notification (%1 is the token label, %2 is the error message/code)</extracomment>
+        <translation>Не получилось сохранить %1 (%2)</translation>
+    </message>
+    <message id="yubikey-popup-put_tokens_success">
+        <source>Tokens saved</source>
+        <extracomment>Pop-up notification</extracomment>
+        <translation>Коды сохранены</translation>
+    </message>
+    <message id="yubikey-popup-put_tokens_error">
+        <source>Failed to save one or more tokens (%1)</source>
+        <extracomment>Pop-up notification (%1 is the error message/code)</extracomment>
+        <translation>Один или несколько кодов сохранить не удалось (%1)</translation>
+    </message>
+    <message id="yubikey-item-touch_to_delete">
+        <source>Touch YubiKey to delete this token</source>
+        <extracomment>List item text</extracomment>
+        <translation>Поднесите YubiKey для удаления</translation>
+    </message>
+    <message id="yubikey-item-touch_to_rename">
+        <source>Touch YubiKey to rename this token</source>
+        <extracomment>List item text</extracomment>
+        <translation>Поднесите YubiKey для переименования</translation>
     </message>
 </context>
 </TS>

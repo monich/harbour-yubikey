@@ -18,8 +18,8 @@ CoverBackground {
 
     readonly property string name: _haveYubiKey ? yubiKeyPage.favoriteName : ""
     readonly property string password: _haveYubiKey ? yubiKeyPage.favoritePassword : ""
-    readonly property int passwordType: _haveYubiKey ? yubiKeyPage.favoriteTokenType : YubiKeyCard.TypeUnknown
-    readonly property bool accessDenied: _haveYubiKey && yubiKeyPage.yubiKeyAccessDenied
+    readonly property int passwordType: _haveYubiKey ? yubiKeyPage.favoriteTokenType : YubiKey.TypeUnknown
+    readonly property bool accessDenied: _haveYubiKey && yubiKeyPage.yubiKey.authAccess === YubiKey.AccessDenied
 
     property string _displayName
     property string _displayPassword
@@ -44,7 +44,7 @@ CoverBackground {
 
     function updateDisplayPassword() {
         if (_displayPassword === "" || !flipable.flipping) {
-            _displayPassword = (accessDenied || (passwordType === YubiKeyCard.TypeUnknown)) ? "" : password
+            _displayPassword = (accessDenied || (passwordType === YubiKey.TypeUnknown)) ? "" : password
         }
     }
 
@@ -144,7 +144,7 @@ CoverBackground {
                 width: flipable.imageSize
                 height: width
                 anchors.horizontalCenter: parent.horizontalCenter
-                timeLeft: passwordType === YubiKeyCard.TypeTOTP ? _passwordTimeLeft : 0
+                timeLeft: passwordType === YubiKey.TypeTOTP ? _passwordTimeLeft : 0
                 active: flipable.flipped || flipable.flipping
                 visible: opacity > 0
                 opacity: _displayAccessDenied ? 0 : 1
@@ -172,8 +172,8 @@ CoverBackground {
                 truncationMode: TruncationMode.Fade
                 verticalAlignment: Text.AlignVCenter
                 color: Theme.highlightColor
-                opacity: ((passwordType === YubiKeyCard.TypeHOTP && !_passwordMarkedForRefresh) ||
-                          (passwordType === YubiKeyCard.TypeTOTP && _passwordTimeLeft)) ? 1 : 0.4
+                opacity: ((passwordType === YubiKey.TypeHOTP && !_passwordMarkedForRefresh) ||
+                          (passwordType === YubiKey.TypeTOTP && _passwordTimeLeft)) ? 1 : 0.4
                 transform: HarbourTextFlip {
                     enabled: !flipable.flipping
                     target: passwordLabel

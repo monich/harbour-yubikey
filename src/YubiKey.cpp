@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2022-2025 Slava Monich <slava@monich.com>
- * Copyright (C) 2022 Jolla Ltd.
+ * Copyright (C) 2026 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -37,503 +36,323 @@
  * any official policies, either expressed or implied.
  */
 
-#include <nfcdc_default_adapter.h>
-#include <nfcdc_isodep.h>
-
-#include <foil_random.h>
-
 #include "YubiKey.h"
+
 #include "YubiKeyAuth.h"
-#include "YubiKeyConstants.h"
-#include "YubiKeyTag.h"
+#include "YubiKeyIo.h"
+#include "YubiKeyOpQueue.h"
 #include "YubiKeyUtil.h"
 
+#include "HarbourBase32.h"
 #include "HarbourDebug.h"
+#include "HarbourParentSignalQueueObject.h"
 #include "HarbourUtil.h"
 
-#include <QtCore/QAtomicInt>
 #include <QtCore/QDateTime>
-#include <QtCore/QMap>
+#include <QtCore/QListIterator>
+#include <QtCore/QPointer>
 #include <QtCore/QTimer>
+#include <QtCore/QtEndian>
 
 // s(SignalName,signalName)
-#define YUBIKEY_SIGNALS(s) \
-    s(YubiKeyVersion,yubiKeyVersion) \
-    s(YubiKeySerial,yubiKeySerial) \
-    s(OtpListFetched,otpListFetched) \
-    s(OtpList,otpList) \
-    s(OtpData,otpData) \
+#define QUEUED_SIGNALS(s) \
+    s(YubiKeyIo,yubiKeyIo) \
     s(Present,present) \
-    s(AuthAccess,authAccess) \
-    s(RefreshableTokens,refreshableTokens) \
-    s(OperationIds,operationIds) \
-    s(TotpTimeLeft,totpTimeLeft) \
-    s(TotpValid,totpValid)
-
-#if HARBOUR_DEBUG
-#  define REPORT_ERROR(name,sw,err) \
-    ((void)((err) ? HDEBUG(name " error" << (err)->message) : \
-    HDEBUG(name " error" << hex << sw)))
-#else
-#  define REPORT_ERROR(name,sw,err) ((void)0)
-#endif // HARBOUR_DEBUG
+    s(OtpList,otpList) \
+    s(OtpListFetched,otpListFetched) \
+    s(UpdatingPasswords,updatingPasswords) \
+    s(HaveTotpCodes,haveTotpCodes) \
+    s(HaveBeenReset,haveBeenReset) \
+    s(TotpTimeLeft,totpTimeLeft)
 
 // ==========================================================================
 // YubiKey::Private
 // ==========================================================================
 
-#define CALCULATE_ALL_RESP_METHOD calculateAllResp
-#define RESET_RESP_METHOD resetResp
-#define SET_CODE_RESP_METHOD setCodeResp
-#define REMOVE_CODE_RESP_METHOD removeCodeResp
+enum YubiKeySignal {
+    #define SIGNAL_ENUM_(Name,name) Signal##Name##Changed,
+    QUEUED_SIGNALS(SIGNAL_ENUM_)
+    #undef  SIGNAL_ENUM_
+    YubiKeySignalCount
+};
+
+typedef HarbourParentSignalQueueObject<YubiKey,
+    YubiKeySignal, YubiKeySignalCount>
+    YubiKeyPrivateBase;
 
 class YubiKey::Private :
-    public QObject,
+    public YubiKeyPrivateBase,
     public YubiKeyConstants
 {
     Q_OBJECT
+    static const SignalEmitter gSignalEmitters[];
+    static const YubiKeyIo::APDU LIST_APDU;
+
+    // (relatively) easy way to get command specific OpData from a YubiKeyOp
+    // completion slot
+    template <typename T> T* senderOpData() const
+        { return static_cast<T*>(qobject_cast<YubiKeyOp*>(sender())->opData()); }
 
 public:
-    typedef void (YubiKey::*SignalEmitter)();
-    typedef uint SignalMask;
+    typedef QList<YubiKeyOtp> OtpList;
+    typedef QListIterator<YubiKeyOtp> OtpListIterator;
+    typedef QMutableListIterator<YubiKeyOtp> OtpMutableListIterator;
+    struct OtpListData : public YubiKeyOp::OpData
+    {   // Pass the LIST output to the CALCULATE_ALL completion slot
+        const OtpList iOtpList;
+        OtpListData(const OtpList& aList) : iOtpList(aList) {}
+        ~OtpListData() Q_DECL_OVERRIDE {}
+    };
+    struct StringData : public YubiKeyOp::OpData
+    {
+        const QString iString;
+        StringData(const QString& aString) : iString(aString) {}
+        ~StringData() Q_DECL_OVERRIDE {}
+    };
+    struct BytesData : public YubiKeyOp::OpData
+    {
+        const QByteArray iBytes;
+        BytesData(const QByteArray& aBytes) : iBytes(aBytes) {}
+        ~BytesData() Q_DECL_OVERRIDE {}
+    };
 
     enum {
-        MaxNameLen = 64,
         MinKeySize = 14
     };
 
-    enum Signal {
-        // The order must match the initializer in emitQueuedSignals()
-#define SIGNAL_ENUM_(Name,name) Signal##Name##Changed,
-        YUBIKEY_SIGNALS(SIGNAL_ENUM_)
-#undef  SIGNAL_ENUM_
-        SignalAccessKeyNotAccepted,
-        SignalTotpCodesExpired,
-        SignalCount
-    };
+    Private(YubiKey*);
 
-    struct CalculateAllApdu {
-        NfcIsoDepApdu iApdu;
-        uchar iData[10];
-    };
-
-    class KeyOperation : public YubiKeyTag::Operation {
-    public:
-        KeyOperation(const char*, YubiKey*, bool aRequireSelect = false);
-
-    protected:
-        ~KeyOperation();
-
-    protected:
-        YubiKey* const iYubiKey;
-    };
-
-    // Authorize (verify)
-    class AuthorizeOperation : public KeyOperation {
-    public:
-        AuthorizeOperation(YubiKey*, bool);
-
-    protected:
-        bool startOperation() Q_DECL_OVERRIDE;
-
-    private:
-        static void validateResp(Operation*, const GUtilData*, guint, const GError*);
-
-    private:
-        YubiKeyAlgorithm iAlgorithm;
-        QByteArray iHostChallenge;
-        QByteArray iAccessKey;
-    };
-
-    // List
-    class ListOperation : public KeyOperation {
-    public:
-        ListOperation(YubiKey*);
-
-    protected:
-        bool startOperation() Q_DECL_OVERRIDE;
-
-    private:
-        static void listResp(Operation*, const GUtilData*, guint, const GError*);
-        static void calculateAllResp(Operation*, const GUtilData*, guint, const GError*);
-    };
-
-    // Refresh (calculate individual codes)
-    class RefreshOperation : public KeyOperation {
-    public:
-        RefreshOperation(YubiKey*, const QStringList);
-
-    protected:
-        bool startOperation() Q_DECL_OVERRIDE;
-
-    private:
-        bool calculateNext();
-        static void calculateResp(Operation*, const GUtilData*, guint, const GError*);
-
-    private:
-        const QStringList iNames;
-        QByteArray iLastNameUtf8;
-        int iNextName;
-    };
-
-    // Delete
-    class DeleteOperation : public KeyOperation {
-    public:
-        DeleteOperation(YubiKey*, const QStringList);
-
-    protected:
-        bool startOperation() Q_DECL_OVERRIDE;
-
-    private:
-        bool deleteNext();
-        static void deleteResp(Operation*, const GUtilData*, guint, const GError*);
-
-    private:
-        const QStringList iNames;
-        int iNextName;
-    };
-
-    // Put
-    class PutOperation : public KeyOperation {
-    public:
-        PutOperation(YubiKey*, const QList<YubiKeyToken>);
-
-    protected:
-        bool startOperation() Q_DECL_OVERRIDE;
-
-    private:
-        YubiKeyToken lastToken() const;
-        bool putNext();
-        static void putResp(Operation*, const GUtilData*, guint, const GError*);
-
-    private:
-        const QList<YubiKeyToken> iTokens;
-        int iNextToken;
-    };
-
-    // Rename
-    class RenameOperation : public KeyOperation {
-    public:
-        RenameOperation(YubiKey*, const QString, const QString);
-
-    protected:
-        bool startOperation() Q_DECL_OVERRIDE;
-        void finished(bool aSuccess) Q_DECL_OVERRIDE;
-
-    private:
-        static void renameResp(Operation*, const GUtilData*, guint, const GError*);
-
-    private:
-        const QString iFrom;
-        const QString iTo;
-    };
-
-public:
-    static QMap<QByteArray,YubiKey*> gMap;
-
-    static const NfcIsoDepApdu CMD_LIST;
-    static const NfcIsoDepApdu CMD_RESET;
-    static const NfcIsoDepApdu CMD_VALIDATE_TEMPLATE;
-    static const NfcIsoDepApdu CMD_CALCULATE_ALL_TEMPLATE;
-    static const NfcIsoDepApdu CMD_CALCULATE_TEMPLATE;
-    static const NfcIsoDepApdu CMD_SET_CODE;
-    static const NfcIsoDepApdu CMD_PUT_TEMPLATE;
-    static const NfcIsoDepApdu CMD_DELETE_TEMPLATE;
-    static const NfcIsoDepApdu CMD_RENAME_TEMPLATE;
-
-    static const uchar CMD_SET_CODE_DATA[];
-
-    Private(const QByteArray, YubiKey*);
-    ~Private();
-
-    YubiKey* parentObject();
-    void queueSignal(Signal);
-    void emitQueuedSignals();
-
-    void dropTag();
-    bool validTag();
-    bool canTransmit();
-    bool haveAccess();
-    void verifyAuthorization();
-    void recheckAuthorization();
-    void authorized(YubiKeyAuthAccess);
-    int submit(YubiKeyTag::Operation*, bool aForceSelect = false);
-    void submitUnique(YubiKeyTag::Operation*, bool aForceSelect = false);
-    void requestList(bool aRightAway = false);
-    void submitCalculateAll();
-    int setPassword(const QString);
-    bool submitPassword(const QString, bool);
-    int reset();
-    void updateTagState();
-    void updateTotpTimer();
-    void updatePath();
-    void updateAuthAccess(YubiKeyAuthAccess);
-    void updateAuthAlgorithm();
-    void updateYubiKeyVersion();
-    void updateYubiKeySerial();
-    void updateOperationIds();
-    void calculateAllOk(const QByteArray);
-    void updateOtpList(const QByteArray);
-    void updateOtpData(const QByteArray);
-    void setCodeResp(const GUtilData*, guint, const GError*, SignalEmitter);
-    void mergeOtpCode(const QByteArray, const GUtilData*);
-    const NfcIsoDepApdu* buildCalculateAllApdu(CalculateAllApdu*);
-
+    static YubiKeyTokenType toAuthType(uchar);
+    static YubiKeyAlgorithm toAuthAlgorithm(uchar);
     static qint64 currentPeriod();
-    static void staticAdapterEvent(NfcDefaultAdapter*, NFC_DEFAULT_ADAPTER_PROPERTY, void*);
-    static QByteArray nameToUtf8(const QString);
+    static YubiKeyOtp updateOtpResponseFull(const YubiKeyOtp&, const GUtilData*);
+
+    void setIo(YubiKeyIo*);
+    void updatePresent();
+    OtpList mixOtpLists(OtpList);
+    void setOtpList(OtpList);
+    void resetOtpList();
+    void passwordUpdateStarted();
+    void updateTotpTimer();
+    void listAndCalculateAll();
+    void calculateAll(OtpList);
+    YubiKeyOp* reset();
+    YubiKeyOp* putToken(const YubiKeyToken&, YubiKeyOp::OpData* aData = Q_NULLPTR);
 
 public Q_SLOTS:
-    YUBIKEY_TRANSMIT_RESP_SLOT(CALCULATE_ALL_RESP_METHOD);
-    YUBIKEY_TRANSMIT_RESP_SLOT(RESET_RESP_METHOD);
-    YUBIKEY_TRANSMIT_RESP_SLOT(SET_CODE_RESP_METHOD);
-    YUBIKEY_TRANSMIT_RESP_SLOT(REMOVE_CODE_RESP_METHOD);
-    void onTagStateChanged();
+    void onIoStateChanged();
+    void onListFinished(uint, const QByteArray&);
+    void onCalculateAllFinished(uint, const QByteArray&);
+    void onSetCodeFinished(uint, const QByteArray&);
+    void onResetFinished(uint, const QByteArray&);
+    void onRefreshFinished(uint, const QByteArray&);
+    void onPasswordUpdateFinished();
+    void onYubiKeyConnected();
     void onYubiKeyIdChanged();
-    void onYubiKeyVersionChanged();
-    void onYubiKeySerialChanged();
-    void onYubiKeyAuthAlgorithmChanged();
-    void onYubiKeyAuthChallengeChanged();
-    void onOperationIdsChanged();
-    void onAccessKeyChanged(YubiKeyAlgorithm);
+    void onAuthAccessChanged();
     void onTotpTimer();
 
 public:
-    QAtomicInt iRef;
-    SignalMask iQueuedSignals;
-    Signal iFirstQueuedSignal;
-    YubiKeyTag* iTag;
-    YubiKeyAuth iAuth;
-    YubiKeyAlgorithm iAuthAlgorithm;
-    NfcDefaultAdapter* iAdapter;
-    gulong iAdapterEventId;
-    GCancellable* iCancel;
+    QPointer<YubiKeyIo> iIo;
+    YubiKeyOpQueue iOpQueue;
+    OtpList iOtpList;
     bool iPresent;
-    YubiKeyAuthAccess iAuthAccess;
-    const QByteArray iYubiKeyId;
-    const QString iYubiKeyIdString;
-    QByteArray iYubiKeyVersion;
-    uint iYubiKeyVersionNumber;
-    QString iYubiKeyVersionString;
-    uint iYubiKeySerial;
-    QByteArray iOtpList;
-    QString iOtpListString;
-    QByteArray iOtpData;
-    QString iOtpDataString;
-    QStringList iRefreshableTokens;
-    QList<int> iOperationIds;
+    int iPasswordUpdateCount;
     bool iOtpListFetched;
-    QTimer* iTotpTimer;
+    bool iHaveTotpCodes;
+    bool iHaveBeenReset;
+    int iTotpTimeLeft;              // seconds
     qint64 iLastRequestedPeriod;    // seconds
     qint64 iLastReceivedPeriod;     // seconds
-    int iTotpTimeLeft;              // seconds
-    bool iTotpValid;
+    QTimer iTotpTimer;
 };
 
-QMap<QByteArray,YubiKey*> YubiKey::Private::gMap;
+/* static */
+const YubiKeyPrivateBase::SignalEmitter
+YubiKey::Private::gSignalEmitters [] = {
+    #define SIGNAL_EMITTER_(Name,name) &YubiKey::name##Changed,
+    QUEUED_SIGNALS(SIGNAL_EMITTER_)
+    #undef  SIGNAL_EMITTER_
+};
 
-// https://developers.yubico.com/OATH/YKOATH_Protocol.html
-const NfcIsoDepApdu YubiKey::Private::CMD_LIST = {
-    0x00, 0xa1, 0x00, 0x00, { NULL, 0 }, 0
-};
-const NfcIsoDepApdu YubiKey::Private::CMD_RESET = {
-    0x00, 0x04, 0xde, 0xad, { NULL, 0 }, 0
-};
-const NfcIsoDepApdu YubiKey::Private::CMD_VALIDATE_TEMPLATE = {
-    0x00, 0xa3, 0x00, 0x00, { NULL, 0 }, 0
-};
-const NfcIsoDepApdu YubiKey::Private::CMD_CALCULATE_ALL_TEMPLATE = {
-    0x00, 0xa4, 0x00, 0x00, { NULL, 0 }, 0
-};
-const NfcIsoDepApdu YubiKey::Private::CMD_CALCULATE_TEMPLATE = {
-    0x00, 0xa2, 0x00, 0x00, { NULL, 0 }, 0
-};
-#define CMD_DATA(data) {data, sizeof(data)}
-const uchar YubiKey::Private::CMD_SET_CODE_DATA[] = { TLV_TAG_KEY, 0x00 };
-const NfcIsoDepApdu YubiKey::Private::CMD_SET_CODE = {
-    0x00, 0x03, 0x00, 0x00, CMD_DATA(CMD_SET_CODE_DATA), 0
-};
-const NfcIsoDepApdu YubiKey::Private::CMD_PUT_TEMPLATE = {
-    0x00, 0x01, 0x00, 0x00, { NULL, 0 }, 0
-};
-const NfcIsoDepApdu YubiKey::Private::CMD_DELETE_TEMPLATE = {
-    0x00, 0x02, 0x00, 0x00, { NULL, 0 }, 0
-};
-const NfcIsoDepApdu YubiKey::Private::CMD_RENAME_TEMPLATE = {
-    0x00, 0x05, 0x00, 0x00, { NULL, 0 }, 0
-};
+/* static */
+const YubiKeyIo::APDU YubiKey::Private::LIST_APDU("LIST", 0x00, 0xa1);
 
 YubiKey::Private::Private(
-    const QByteArray aYubiKeyId,
-    YubiKey* aParent) :
-    QObject(aParent),
-    iRef(1),
-    iQueuedSignals(0),
-    iFirstQueuedSignal(SignalCount),
-    iTag(Q_NULLPTR),
-    iAuth(aYubiKeyId),
-    iAuthAlgorithm(YubiKeyAlgorithm_Unknown),
-    iAdapter(nfc_default_adapter_new()),
-    iCancel(g_cancellable_new()),
+    YubiKey* aYubiKey) :
+    YubiKeyPrivateBase(aYubiKey, gSignalEmitters),
     iPresent(false),
-    iAuthAccess(YubiKeyAuthAccessUnknown),
-    iYubiKeyId(aYubiKeyId),
-    iYubiKeyIdString(HarbourUtil::toHex(aYubiKeyId)),
-    iYubiKeyVersionNumber(0),
-    iYubiKeySerial(0),
+    iPasswordUpdateCount(0),
     iOtpListFetched(false),
-    iTotpTimer(new QTimer(this)),
-    iLastRequestedPeriod(0),
-    iLastReceivedPeriod(0),
+    iHaveTotpCodes(false),
+    iHaveBeenReset(false),
     iTotpTimeLeft(0),
-    iTotpValid(false)
+    iLastRequestedPeriod(0),
+    iLastReceivedPeriod(0)
 {
-    iTotpTimer->setSingleShot(true);
-    connect(iTotpTimer, SIGNAL(timeout()), SLOT(onTotpTimer()));
-    connect(&iAuth, SIGNAL(accessKeyChanged(YubiKeyAlgorithm)),
-        SLOT(onAccessKeyChanged(YubiKeyAlgorithm)));
-    iAdapterEventId = nfc_default_adapter_add_property_handler(iAdapter,
-        NFC_DEFAULT_ADAPTER_PROPERTY_TAGS, staticAdapterEvent, this);
+    iTotpTimer.setSingleShot(true);
+    connect(&iTotpTimer, SIGNAL(timeout()), SLOT(onTotpTimer()));
+
+    connect(&iOpQueue, SIGNAL(yubiKeyIdChanged()),
+        SLOT(onYubiKeyIdChanged()));
+    connect(&iOpQueue, SIGNAL(yubiKeyAuthAccessChanged()),
+        SLOT(onAuthAccessChanged()));
+    connect(&iOpQueue, SIGNAL(yubiKeyConnected()),
+        SLOT(onYubiKeyConnected()));
+
+    connect(&iOpQueue, SIGNAL(yubiKeySerialChanged()),
+        aYubiKey, SIGNAL(yubiKeySerialChanged()));
+    connect(&iOpQueue, SIGNAL(yubiKeyIdChanged()),
+        aYubiKey, SIGNAL(yubiKeyIdChanged()));
+    connect(&iOpQueue, SIGNAL(yubiKeyFwVersionChanged()),
+        aYubiKey, SIGNAL(yubiKeyVersionChanged()));
+    connect(&iOpQueue, SIGNAL(yubiKeyAuthAccessChanged()),
+        aYubiKey, SIGNAL(authAccessChanged()));
+    connect(&iOpQueue, SIGNAL(yubiKeyConnected()),
+        aYubiKey, SIGNAL(yubiKeyConnected()));
+    connect(&iOpQueue, SIGNAL(yubiKeyValidationFailed()),
+        aYubiKey, SIGNAL(yubiKeyValidationFailed()));
+    connect(&iOpQueue, SIGNAL(invalidYubiKeyConnected()),
+        aYubiKey, SIGNAL(invalidYubiKeyConnected()));
+    connect(&iOpQueue, SIGNAL(restrictedYubiKeyConnected()),
+        aYubiKey, SIGNAL(restrictedYubiKeyConnected()));
 }
 
-YubiKey::Private::~Private()
+/* static */
+YubiKeyTokenType
+YubiKey::Private::toAuthType(
+    uchar aTypeAlg)
 {
-    nfc_default_adapter_remove_handler(iAdapter, iAdapterEventId);
-    nfc_default_adapter_unref(iAdapter);
-    dropTag();
+    switch (aTypeAlg & TYPE_MASK) {
+    case TYPE_HOTP: return YubiKeyTokenType_HOTP;
+    case TYPE_TOTP: return YubiKeyTokenType_TOTP;
+    }
+    return YubiKeyTokenType_Unknown;
+}
+
+/* static */
+inline
+YubiKeyAlgorithm
+YubiKey::Private::toAuthAlgorithm(
+    uchar aTypeAlg)
+{
+    return YubiKeyUtil::algorithmFromValue(aTypeAlg & ALG_MASK);
+}
+
+/* static */
+inline
+qint64
+YubiKey::Private::currentPeriod()
+{
+#if HARBOUR_DEBUG
+    // Seconds since epoch. Could be produced with e.g.
+    // date +%s --date="Feb 27 20:00:16"
+    QByteArray value = qgetenv("HARBOUR_YUBIKEY_DATE");
+    if (!value.isEmpty()) {
+        bool ok = false;
+        qint64 secsSinceEpoch = QString::fromLatin1(value).toLongLong(&ok);
+
+        if (ok) {
+            return secsSinceEpoch / TOTP_PERIOD_SEC;
+        }
+    }
+#endif
+    return QDateTime::currentMSecsSinceEpoch() / (TOTP_PERIOD_SEC * 1000);
 }
 
 inline
-YubiKey*
-YubiKey::Private::parentObject()
+void
+YubiKey::Private::resetOtpList()
 {
-    return qobject_cast<YubiKey*>(parent());
+    setOtpList(OtpList());
 }
 
 void
-YubiKey::Private::queueSignal(
-    Signal aSignal)
+YubiKey::Private::setIo(
+    YubiKeyIo* aIo)
 {
-    if (aSignal >= 0 && aSignal < SignalCount) {
-        const SignalMask signalBit = (SignalMask(1) << aSignal);
-        if (iQueuedSignals) {
-            iQueuedSignals |= signalBit;
-            if (iFirstQueuedSignal > aSignal) {
-                iFirstQueuedSignal = aSignal;
-            }
-        } else {
-            iQueuedSignals = signalBit;
-            iFirstQueuedSignal = aSignal;
+    if (iIo != aIo) {
+        queueSignal(SignalYubiKeyIoChanged);
+        if (iIo) {
+            iIo->disconnect(this);
+        }
+        iIo = aIo;
+        iOpQueue.setIo(aIo);
+        updatePresent();
+        if (iHaveBeenReset) {
+            iHaveBeenReset = false;
+            queueSignal(SignalHaveBeenResetChanged);
+        }
+        if (iIo) {
+            connect(aIo, SIGNAL(ioStateChanged(YubiKeyIo::IoState)),
+                SLOT(onIoStateChanged()));
         }
     }
 }
 
 void
-YubiKey::Private::emitQueuedSignals()
+YubiKey::Private::updatePresent()
 {
-    static const char* signalName [] = {
-        // The order must match the Signal enum
-#define SIGNAL_NAME_(Name,name) G_STRINGIFY(name##Changed),
-        YUBIKEY_SIGNALS(SIGNAL_NAME_)
-#undef  SIGNAL_NAME_
-        "signalAccessKeyNotAccepted",
-        "totpCodesExpired"
-    };
-    Q_STATIC_ASSERT(G_N_ELEMENTS(signalName) == SignalCount);
-    if (iQueuedSignals) {
-        // Reset first queued signal before emitting the signals.
-        // Signal handlers may emit more signals.
-        uint i = iFirstQueuedSignal;
-        YubiKey* obj = parentObject();
-        iFirstQueuedSignal = SignalCount;
-        for (; i < SignalCount && iQueuedSignals; i++) {
-            const SignalMask signalBit = (SignalMask(1) << i);
-            if (iQueuedSignals & signalBit) {
-                iQueuedSignals &= ~signalBit;
-                HDEBUG(obj << signalName[i]);
-                // See https://bugreports.qt.io/browse/QTBUG-18434
-                QMetaObject::invokeMethod(obj, signalName[i]);
-            }
-        }
-    }
-}
+    const bool present = iIo && iIo->yubiKeyPresent();
 
-inline
-bool
-YubiKey::Private::validTag()
-{
-    return iTag && iTag->yubiKeyId() == iYubiKeyId;
-}
-
-inline
-bool
-YubiKey::Private::canTransmit()
-{
-    return iTag && iTag->tagState() == YubiKeyTag::TagYubiKeyReady;
-}
-
-inline
-bool
-YubiKey::Private::haveAccess()
-{
-    switch (iAuthAccess) {
-    case YubiKeyAuthAccessOpen:
-    case YubiKeyAuthAccessGranted:
-        return true;
-    case YubiKeyAuthAccessUnknown:
-    case YubiKeyAuthAccessDenied:
-        break;
-    }
-    return false;
-}
-
-void
-YubiKey::Private::verifyAuthorization()
-{
-    if (iPresent) {
-        if (iTag->hasAuthChallenge()) {
-            submitUnique(new AuthorizeOperation(parentObject(), false), true);
-        } else {
-            authorized(YubiKeyAuthAccessOpen);
-        }
+    if (iPresent != present) {
+        iPresent = present;
+        HDEBUG(iPresent);
+        queueSignal(SignalPresentChanged);
     }
 }
 
 void
-YubiKey::Private::recheckAuthorization()
+YubiKey::Private::passwordUpdateStarted()
 {
-    if (iPresent) {
-        submitUnique(new AuthorizeOperation(parentObject(), true), true);
+    if (!(iPasswordUpdateCount++)) {
+        queueSignal(SignalUpdatingPasswordsChanged);
     }
-}
-
-QByteArray
-YubiKey::Private::nameToUtf8(
-    const QString aName)
-{
-    QByteArray utf8(aName.toUtf8());
-
-    if (utf8.size() > MaxNameLen) {
-        QString name(aName);
-
-        do {
-            name.truncate(name.length() - 1);
-            utf8 = name.toUtf8();
-        } while (utf8.size() > MaxNameLen);
-    }
-    return utf8;
+    HDEBUG(iPasswordUpdateCount);
 }
 
 void
-YubiKey::Private::staticAdapterEvent(
-    NfcDefaultAdapter* aAdapter,
-    NFC_DEFAULT_ADAPTER_PROPERTY,
-    void* aSelf)
+YubiKey::Private::onPasswordUpdateFinished()
 {
-    Private* self = (Private*)aSelf;
+    HASSERT(iPasswordUpdateCount > 0);
+    if (!(--iPasswordUpdateCount)) {
+        queueSignal(SignalUpdatingPasswordsChanged);
+    }
+    HDEBUG(iPasswordUpdateCount);
+    emitQueuedSignals();
+}
 
-    self->updatePath();
-    self->emitQueuedSignals();
+void
+YubiKey::Private::onIoStateChanged()
+{
+    updatePresent();
+    emitQueuedSignals();
+}
+
+void
+YubiKey::Private::onYubiKeyConnected()
+{
+    HDEBUG("YubiKey" << iIo->ioPath() << "connected");
+    listAndCalculateAll();
+    emitQueuedSignals();
+}
+
+void
+YubiKey::Private::onYubiKeyIdChanged()
+{
+    if (iOtpListFetched) {
+        iOtpListFetched = false;
+        resetOtpList();
+        queueSignal(SignalOtpListFetchedChanged);
+        emitQueuedSignals();
+    }
+}
+
+void
+YubiKey::Private::onAuthAccessChanged()
+{
+    resetOtpList();
+    emitQueuedSignals();
 }
 
 void
@@ -541,384 +360,6 @@ YubiKey::Private::onTotpTimer()
 {
     updateTotpTimer();
     emitQueuedSignals();
-}
-
-void
-YubiKey::Private::onTagStateChanged()
-{
-    updateTagState();
-    emitQueuedSignals();
-}
-
-void
-YubiKey::Private::onYubiKeyIdChanged()
-{
-    if (iTag &&
-        iTag->tagState() == YubiKeyTag::TagYubiKeyReady &&
-        iTag->yubiKeyId() != iYubiKeyId) {
-        HDEBUG(qPrintable(iYubiKeyIdString) << "=>" <<
-            qPrintable(HarbourUtil::toHex(iTag->yubiKeyId())) << "(reset?)");
-        dropTag();
-        updateTagState();
-        emitQueuedSignals();
-    }
-}
-
-void
-YubiKey::Private::onYubiKeyVersionChanged()
-{
-    updateYubiKeyVersion();
-    emitQueuedSignals();
-}
-
-void
-YubiKey::Private::onYubiKeySerialChanged()
-{
-    updateYubiKeySerial();
-    emitQueuedSignals();
-}
-
-void
-YubiKey::Private::onYubiKeyAuthAlgorithmChanged()
-{
-    updateAuthAlgorithm();
-    emitQueuedSignals();
-}
-
-void
-YubiKey::Private::onYubiKeyAuthChallengeChanged()
-{
-    verifyAuthorization();
-    emitQueuedSignals();
-}
-
-void
-YubiKey::Private::onOperationIdsChanged()
-{
-    updateOperationIds();
-    emitQueuedSignals();
-}
-
-void
-YubiKey::Private::onAccessKeyChanged(
-    YubiKeyAlgorithm aAlgorithm)
-{
-    HDEBUG(qPrintable(HarbourUtil::toHex(iYubiKeyId)) << aAlgorithm);
-    updateAuthAccess(YubiKeyAuthAccessUnknown);
-    verifyAuthorization();
-    emitQueuedSignals();
-}
-
-void
-YubiKey::Private::dropTag()
-{
-    if (iCancel) {
-        g_cancellable_cancel(iCancel);
-        g_object_unref(iCancel);
-        iCancel = Q_NULLPTR;
-    }
-    if (iTag) {
-        iTag->disconnect(parentObject());
-        iTag->disconnect(this);
-        iTag->put();
-        iTag = Q_NULLPTR;
-    }
-}
-
-void
-YubiKey::Private::updatePath()
-{
-    const char* activeTag = iAdapter->tags[0];
-
-    if (activeTag) {
-        const QString path(QString::fromLatin1(activeTag));
-
-        if (!iTag || iTag->path() != path) {
-            dropTag();
-            iCancel = g_cancellable_new();
-            iTag = YubiKeyTag::get(path);
-            connect(iTag,
-                SIGNAL(tagStateChanged()),
-                SLOT(onTagStateChanged()));
-            connect(iTag,
-                SIGNAL(yubiKeyIdChanged()),
-                SLOT(onYubiKeyIdChanged()));
-            connect(iTag,
-                SIGNAL(yubiKeyVersionChanged()),
-                SLOT(onYubiKeyVersionChanged()));
-            connect(iTag,
-                SIGNAL(yubiKeySerialChanged()),
-                SLOT(onYubiKeySerialChanged()));
-            connect(iTag,
-                SIGNAL(yubiKeyAuthAlgorithmChanged()),
-                SLOT(onYubiKeyAuthAlgorithmChanged()));
-            connect(iTag,
-                SIGNAL(yubiKeyAuthChallengeChanged()),
-                SLOT(onYubiKeyAuthChallengeChanged()));
-            connect(iTag,
-                SIGNAL(operationIdsChanged()),
-                SLOT(onOperationIdsChanged()));
-            parentObject()->connect(iTag,
-                SIGNAL(operationFinished(int,bool)),
-                SIGNAL(operationFinished(int,bool)));
-            updateTagState();
-        }
-    } else if (iTag) {
-        dropTag();
-        updateTagState();
-    }
-}
-
-void
-YubiKey::Private::updateAuthAccess(
-    YubiKeyAuthAccess aAccess)
-{
-    if (iAuthAccess != aAccess) {
-        HDEBUG(iAuthAccess << "=>" << aAccess);
-        iAuthAccess = aAccess;
-        queueSignal(SignalAuthAccessChanged);
-        if (!haveAccess()) {
-            updateOtpList(QByteArray());
-            updateOtpData(QByteArray());
-            iTotpTimer->stop();
-            if (iTotpValid) {
-                iTotpValid = false;
-                queueSignal(SignalTotpValidChanged);
-            }
-            if (iTotpTimeLeft) {
-                iTotpTimeLeft = 0;
-                queueSignal(SignalTotpTimeLeftChanged);
-            }
-        }
-    }
-}
-
-void
-YubiKey::Private::updateYubiKeyVersion()
-{
-    if (validTag()) {
-        const QByteArray version(iTag->yubiKeyVersion());
-
-        if (iYubiKeyVersion != version) {
-            iYubiKeyVersion = version;
-            iYubiKeyVersionString = YubiKeyUtil::versionToString(version);
-            iYubiKeyVersionNumber = YubiKeyUtil::versionToNumber(version);
-            HDEBUG(qPrintable(iYubiKeyVersionString));
-            queueSignal(SignalYubiKeyVersionChanged);
-        }
-    }
-}
-
-void
-YubiKey::Private::updateYubiKeySerial()
-{
-    if (validTag()) {
-        const uint serial(iTag->yubiKeySerial());
-
-        if (iYubiKeySerial != serial) {
-            iYubiKeySerial = serial;
-            HDEBUG(iYubiKeySerial);
-            queueSignal(SignalYubiKeySerialChanged);
-        }
-    }
-}
-
-void
-YubiKey::Private::updateAuthAlgorithm()
-{
-    if (validTag()) {
-        const YubiKeyAlgorithm alg = iTag->yubiKeyAuthAlgorithm();
-
-        if (iAuthAlgorithm != alg) {
-            HDEBUG(iAuthAlgorithm << "=>" << alg);
-            iAuthAlgorithm = alg;
-        }
-        verifyAuthorization();
-    }
-}
-
-void
-YubiKey::Private::updateOtpList(
-    const QByteArray aOtpList)
-{
-    if (iOtpList != aOtpList) {
-        iOtpList = aOtpList;
-        iOtpListString = HarbourUtil::toHex(aOtpList);
-        HDEBUG(qPrintable(iOtpListString));
-        queueSignal(SignalOtpListChanged);
-    }
-}
-
-void
-YubiKey::Private::updateOtpData(
-    const QByteArray aOtpData)
-{
-    if (iOtpData != aOtpData) {
-        iOtpData = aOtpData;
-        iOtpDataString = HarbourUtil::toHex(aOtpData);
-        HDEBUG(qPrintable(iOtpDataString));
-
-        uchar tag;
-        GUtilRange resp;
-        GUtilData data;
-        QString name;
-        QStringList refreshableTokens;
-
-        resp.end = (resp.ptr = (guint8*)aOtpData.constData()) + aOtpData.size();
-
-        // Calculate All Response Syntax
-        //
-        // For HOTP the response tag is 0x77 (No response). For credentials
-        // requiring touch the response tag is 0x7c (No response).
-        // The response will be a list of the following objects:
-        // +---------------+----------------------------------------------+
-        // | Name tag      | 0x71                                         |
-        // | Name length   | Length of name                               |
-        // | Name data     | Name                                         |
-        // | Response tag  | 0x77 for HOTP, 0x7c for touch, 0x75 for full |
-        // |               | response or 0x76 for truncated response      |
-        // +---------------+----------------------------------------------+
-        // | Response len  | Length of response + 1                       |
-        // | Digits        | Number of digits in the OATH code            |
-        // | Response data | Response                                     |
-        // +---------------+----------------------------------------------+
-        while ((tag = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
-            switch (tag) {
-            case TLV_TAG_NAME:
-                name = QString::fromUtf8((char*)data.bytes, (int)data.size);
-                break;
-            case TLV_TAG_NO_RESPONSE:
-            case TLV_TAG_RESPONSE_TOUCH:
-                if (!name.isEmpty()) {
-                    HDEBUG(name << "requires touch");
-                    refreshableTokens.append(name);
-                    name.clear();
-                }
-                break;
-            }
-        }
-
-        queueSignal(SignalOtpDataChanged);
-        if (iRefreshableTokens != refreshableTokens) {
-            iRefreshableTokens = refreshableTokens;
-            HDEBUG("Refreshable tokens" << iRefreshableTokens);
-            queueSignal(SignalRefreshableTokensChanged);
-        }
-    }
-}
-
-void
-YubiKey::Private::mergeOtpCode(
-    const QByteArray aNameUtf8,
-    const GUtilData* aRespData)
-{
-    uchar tag;
-    GUtilRange otpData;
-    GUtilData value;
-    const guint8* startPtr = (guint8*)iOtpData.constData();
-    const char* utf8 = aNameUtf8.constData();
-
-    otpData.end = (otpData.ptr = startPtr) + iOtpData.size();
-    while ((tag = YubiKeyUtil::readTLV(&otpData, &value)) != 0) {
-        if (tag  == TLV_TAG_NAME &&
-            aNameUtf8.size() == (int)value.size &&
-            !memcmp(utf8, value.bytes, value.size)) {
-            const gsize offset = otpData.ptr - startPtr;
-            QByteArray newOtpData;
-
-            // Replace the next TLV block
-            switch (YubiKeyUtil::readTLV(&otpData, &value)) {
-            case TLV_TAG_RESPONSE_FULL:
-            case TLV_TAG_RESPONSE_TRUNCATED:
-            case TLV_TAG_NO_RESPONSE:
-            case TLV_TAG_RESPONSE_TOUCH:
-                newOtpData.reserve(iOtpData.size() +
-                    (((int)aRespData->size - (int)value.size)));
-                // Leading part including the name TLV
-                newOtpData.append((char*)startPtr, offset);
-                // The new (presumably full) response data
-                YubiKeyUtil::appendTLV(&newOtpData, TLV_TAG_RESPONSE_FULL,
-                    (uchar) aRespData->size, aRespData->bytes);
-                // And the remaining part (if any)
-                newOtpData.append((char*)(value.bytes + value.size),
-                    (int)(otpData.end - otpData.ptr));
-                updateOtpData(newOtpData);
-                break;
-            default:
-                HWARN("Unexpected response tag" << hex << tag);
-                break;
-            }
-            return;
-        }
-    }
-    HWARN(aNameUtf8.constData() << "OTP block not found");
-}
-
-void
-YubiKey::Private::updateTagState()
-{
-    const bool present = (canTransmit() && iTag->yubiKeyId() == iYubiKeyId);
-
-    if (iPresent != present) {
-        iPresent = present;
-        queueSignal(SignalPresentChanged);
-        HDEBUG(qPrintable(iYubiKeyIdString) <<
-            (present ? "present" : "not present"));
-    }
-    updateOperationIds();
-    if (present) {
-        updateAuthAlgorithm();
-        updateYubiKeySerial();
-        updateYubiKeyVersion();
-        verifyAuthorization();
-    }
-}
-
-void
-YubiKey::Private::updateOperationIds()
-{
-    const QList<int> ids((iTag && iTag->yubiKeyId() == iYubiKeyId) ?
-        iTag->operationIds() : QList<int>());
-
-    if (iOperationIds != ids) {
-        iOperationIds = ids;
-        HDEBUG(ids);
-        queueSignal(SignalOperationIdsChanged);
-    }
-}
-
-void
-YubiKey::Private::authorized(
-    YubiKeyAuthAccess aAccess)
-{
-    updateAuthAccess(aAccess);
-    requestList();
-}
-
-int
-YubiKey::Private::submit(
-    YubiKeyTag::Operation* aOperation,  // Takes ownership
-    bool aToFront)
-{
-    const int id = aOperation->submit(iTag, aToFront);
-    aOperation->unref();
-    return id;
-}
-
-void
-YubiKey::Private::submitUnique(
-    YubiKeyTag::Operation* aOperation,  // Takes ownership
-    bool aToFront)
-{
-    aOperation->submitUnique(iTag, aToFront);
-    aOperation->unref();
-}
-
-inline
-qint64
-YubiKey::Private::currentPeriod()
-{
-    return QDateTime::currentMSecsSinceEpoch() / (TOTP_PERIOD_SEC * 1000);
 }
 
 void
@@ -934,158 +375,714 @@ YubiKey::Private::updateTotpTimer()
         const qint64 nextSecond = (secsSinceEpoch + 1) * 1000;
 
         iTotpTimeLeft = (int)(endOfThisPeriod - secsSinceEpoch);
-        iTotpTimer->start((int)(nextSecond - msecsSinceEpoch));
-        if (!iTotpValid) {
-            iTotpValid = true;
-            queueSignal(SignalTotpValidChanged);
-        }
+        iTotpTimer.start((int)(nextSecond - msecsSinceEpoch));
     } else {
-        queueSignal(SignalTotpCodesExpired);
         iTotpTimeLeft = 0;
-        iTotpTimer->stop();
-        if (iTotpValid) {
-            iTotpValid = false;
-            queueSignal(SignalTotpValidChanged);
+        iTotpTimer.stop();
+        // Try to refresh the passwords
+        if (iIo) {
+            switch (iIo->ioState()) {
+            case YubiKeyIo::IoTargetInvalid:
+            case YubiKeyIo::IoTargetGone:
+            case YubiKeyIo::IoError:
+                // The I/O in these states is unusable and will never
+                // become usable
+                break;
+            case YubiKeyIo::IoUnknown:
+            case YubiKeyIo::IoReady:
+            case YubiKeyIo::IoLocking:
+            case YubiKeyIo::IoLocked:
+            case YubiKeyIo::IoActive:
+                // This has a chance to work
+                calculateAll(iOtpList);
+                break;
+            }
         }
-        // Try to refresh the passwords (and fail if there's no card)
-        submitCalculateAll();
     }
 
     if (lastTotpTimeLeft != iTotpTimeLeft) {
+        HDEBUG(iTotpTimeLeft << "sec left");
         queueSignal(SignalTotpTimeLeftChanged);
     }
 }
 
-void
-YubiKey::Private::requestList(
-    bool aRightAway)
+YubiKey::Private::OtpList
+YubiKey::Private::mixOtpLists(
+    OtpList aList)
 {
-    submitUnique(new ListOperation(parentObject()), aRightAway);
+    // Preserve the existing passwords if the new list doesn't have new ones
+    QHash<QByteArray,YubiKeyOtp> map;
+
+    for (OtpListIterator it1(iOtpList); it1.hasNext();) {
+        const YubiKeyOtp& otp = it1.next();
+
+        map.insert(otp.iName, otp);
+    }
+
+    for (OtpMutableListIterator it2(aList); it2.hasNext();) {
+        YubiKeyOtp& otp2 = it2.next();
+
+        if (!otp2.iMiniHash && map.contains(otp2.iName)) {
+            const YubiKeyOtp& otp1 = map.value(otp2.iName);
+
+            if (otp2.iType == otp1.iType &&
+                otp2.iAlg == otp1.iAlg &&
+                otp2.iDigits == otp1.iDigits) {
+                otp2.iMiniHash = otp1.iMiniHash;
+                HDEBUG(otp2);
+            }
+        }
+    }
+
+    return aList;
 }
 
-const NfcIsoDepApdu*
-YubiKey::Private::buildCalculateAllApdu(
-    CalculateAllApdu* aApdu)
+void
+YubiKey::Private::setOtpList(
+    OtpList aList)
 {
-    const quint64 challenge = htobe64(iLastRequestedPeriod = currentPeriod());
-    NfcIsoDepApdu* apdu = &aApdu->iApdu;
+    if (iOtpList != aList) {
+        iOtpList = aList;
+        queueSignal(SignalOtpListChanged);
+
+        const bool hadTotpCodes = iHaveTotpCodes;
+        iHaveTotpCodes = false;
+        for (OtpListIterator it(iOtpList); it.hasNext();) {
+            if (it.next().iType == YubiKeyTokenType_TOTP) {
+                iHaveTotpCodes = true;
+                break;
+            }
+        }
+        if (hadTotpCodes != iHaveTotpCodes) {
+            queueSignal(SignalHaveTotpCodesChanged);
+        }
+        if (!iHaveTotpCodes) {
+            iTotpTimer.stop();
+            if (iTotpTimeLeft) {
+                iTotpTimeLeft = 0;
+                queueSignal(SignalTotpTimeLeftChanged);
+            }
+        }
+    }
+}
+
+/* static */
+YubiKeyOtp
+YubiKey::Private::updateOtpResponseFull(
+    const YubiKeyOtp& aOtp,
+    const GUtilData* aData)
+{
+    GUtilData data = *aData;
+    YubiKeyOtp otp(aOtp);
+
+    // +-----------------+----------------------------------------------+
+    // | Response tag    | 0x77 for HOTP, 0x7c for touch, 0x75 for full |
+    // |                 | response or 0x76 for truncated response      |
+    // | Response len    | Length of response + 1                       |
+    // | Digits          | Number of digits in the OATH code            |
+    // | Response data   | Response                                     |
+    // +-----------------+----------------------------------------------+
+    otp.iDigits = data.bytes[0];
+
+    // The rest is the calculated hash
+    data.bytes++;
+    data.size--;
+
+    if (data.size > 0) {
+        // Do the dynamic offset truncation per RFC 4226
+        gsize off = qMin(gsize(data.bytes[data.size - 1] & 0x0f), data.size - 4);
+        otp.iMiniHash = qFromBigEndian(*(quint32*)(data.bytes + off)) & 0x7fffffff;
+    }
+
+    HDEBUG(otp);
+    return otp;
+}
+
+YubiKeyOp*
+YubiKey::Private::putToken(
+    const YubiKeyToken& aToken,
+    YubiKeyOp::OpData* aData)
+{
+    YubiKeyIo::APDU apdu("PUT", 0x00, 0x01);
+
+    // Put Data
+    //
+    // +-----------------+----------------------------------------------+
+    // | Name tag        | 0x71                                         |
+    // | Name length     | Length of name data, max 64 bytes            |
+    // | Name data       | Name                                         |
+    // +-----------------+----------------------------------------------+
+    // | Key tag         | 0x73                                         |
+    // | Key length      | Length of key data + 2                       |
+    // | Key algorithm   | High 4 bits is type, low 4 bits is algorithm |
+    // | Digits          | Number of digits in OATH code                |
+    // | Key data        | Key                                          |
+    // +-----------------+----------------------------------------------+
+    // | Property tag(o) | 0x78                                         |
+    // | Property(o)     | Property byte                                |
+    // +-----------------+----------------------------------------------+
+    // | IMF tag(o)      | 0x7a (only valid for HOTP)                   |
+    // | IMF length(o)   | Length of imf data, always 4 bytes           |
+    // | IMF data(o)     | Imf                                          |
+    // +-----------------+----------------------------------------------+
+
+    // YubiKey seems to require at least 14 bytes of key data
+    // Pad the key with zeros if necessary
+    const QByteArray secret(aToken.secret());
+    const int keySize = qMax(secret.size(), (int) MinKeySize);
+    const int padding = keySize - secret.size();
+    const QByteArray nameUtf8(YubiKeyUtil::nameToUtf8(aToken.label()));
+    uchar type;
+
+    if (aToken.type() == YubiKeyTokenType_HOTP) {
+        type = TYPE_HOTP;
+        apdu.data.reserve(nameUtf8.size() + keySize + 16);
+    } else {
+        type = TYPE_TOTP;
+        apdu.data.reserve(nameUtf8.size() + keySize + 8);
+    }
+
+    apdu.appendTLV(TLV_TAG_NAME, nameUtf8);
+    apdu.data.append((char)TLV_TAG_KEY);
+    apdu.data.append((char)(keySize + 2));
+    apdu.data.append((char)(type | YubiKeyUtil::algorithmValue(aToken.algorithm())));
+    apdu.data.append((char)aToken.digits());
+    apdu.data.append(secret);
+    for (int i = 0; i < padding; i++) {
+        apdu.data.append((char)0);
+    }
+
+    if (aToken.type() == YubiKeyTokenType_HOTP) {
+        const qint32 imf = qToBigEndian<qint32>(aToken.counter());
+
+        apdu.data.append((char)TLV_TAG_PROPERTY);
+        apdu.data.append((char)PROP_REQUIRE_TOUCH);
+        apdu.appendTLV(TLV_TAG_IMF, sizeof(imf), &imf);
+    }
+
+    return iOpQueue.queue(apdu, YubiKeyOpQueue::KeySpecific,
+        YubiKeyOpQueue::HighPriority, aData);
+}
+
+void
+YubiKey::Private::listAndCalculateAll()
+{
+    YubiKeyOp* listOp = iOpQueue.queue(LIST_APDU, YubiKeyOpQueue::Replace |
+        YubiKeyOpQueue::Retry);
+    if (listOp) {
+        passwordUpdateStarted();
+        connect(listOp,
+            SIGNAL(destroyed(QObject*)),
+            SLOT(onPasswordUpdateFinished()));
+        connect(listOp,
+            SIGNAL(opFinished(uint,QByteArray)),
+            SLOT(onListFinished(uint,QByteArray)));
+    }
+}
+
+void
+YubiKey::Private::calculateAll(
+    OtpList aOtpList)
+{
+    const quint64 challenge = qToBigEndian(iLastRequestedPeriod = currentPeriod());
+    static const YubiKeyIo::APDU CALCULATE_ALL("CALCULATE_ALL", 0x00, 0xa4);
 
     // Calculate All Data
     //
-    // +------------------+---------------------+
-    // | Challenge tag    | 0x74                |
-    // | Challenge length | Length of challenge |
-    // | Challenge data   | Challenge           |
-    // +------------------+---------------------+
-    aApdu->iData[0] = TLV_TAG_CHALLENGE;
-    aApdu->iData[1] = sizeof(challenge);
-    memcpy(aApdu->iData + 2, &challenge, sizeof(challenge));
+    // +-------------------+--------------------------------------------+
+    // | Challenge tag     | 0x74 (TLV_TAG_CHALLENGE)                   |
+    // | Challenge length  | Length of challenge                        |
+    // | Challenge data    | Challenge                                  |
+    // +-------------------+--------------------------------------------+
+    YubiKeyIo::APDU apdu(CALCULATE_ALL);
 
-    *apdu = CMD_CALCULATE_ALL_TEMPLATE;
-    apdu->data.bytes = aApdu->iData;
-    apdu->data.size = sizeof(aApdu->iData);
-    return apdu;
-}
+    apdu.data.reserve(CHALLENGE_LEN + 2);
+    apdu.appendTLV(TLV_TAG_CHALLENGE, sizeof(challenge), &challenge);
 
-void
-YubiKey::Private::submitCalculateAll()
-{
-    if (canTransmit()) {
-        CalculateAllApdu apdu;
-
-        HDEBUG("CALCULATE ALL");
-        iTag->transmit("CALCULATE ALL", buildCalculateAllApdu(&apdu),
-            this, G_STRINGIFY(CALCULATE_ALL_RESP_METHOD), iCancel);
+    YubiKeyOp* calculateAllOp = iOpQueue.queue(apdu, YubiKeyOpQueue::Replace,
+        new OtpListData(aOtpList));
+    if (calculateAllOp) {
+        passwordUpdateStarted();
+        connect(calculateAllOp,
+            SIGNAL(destroyed(QObject*)),
+            SLOT(onPasswordUpdateFinished()));
+        connect(calculateAllOp,
+            SIGNAL(opFinished(uint,QByteArray)),
+            SLOT(onCalculateAllFinished(uint,QByteArray)));
     }
 }
 
 void
-YubiKey::Private::calculateAllOk(
-    const QByteArray aData)
+YubiKey::Private::onListFinished(
+    uint aResult,
+    const QByteArray& aData)
 {
-    iLastReceivedPeriod = iLastRequestedPeriod;
-    updateOtpData(aData);
-    updateTotpTimer();
-}
+    if (aResult == RC_OK) {
+        uchar tag;
+        GUtilRange resp;
+        GUtilData data;
+        OtpList list;
 
-void
-YubiKey::Private::CALCULATE_ALL_RESP_METHOD(
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
-{
-    if (!aError && aSw == RC_OK) {
-        HDEBUG("CALCULATE ALL ok" << aResp->size <<
-            qPrintable(YubiKeyUtil::toHex(aResp)));
-        if (haveAccess()) {
-            calculateAllOk(YubiKeyUtil::toByteArray(aResp));
-            emitQueuedSignals();
+        // LIST Response Syntax
+        //
+        // Response is a continual list of objects looking like:
+        // +-----------------+----------------------------------------------+
+        // | Name list tag   | 0x72 (TLV_TAG_LIST_ENTRY)                    |
+        // | Name length     | Length of name + 1                           |
+        // | Algorithm       | High 4 bits is type, low 4 bits is algorithm |
+        // | Name data       | Name                                         |
+        // +-----------------+----------------------------------------------+
+        HDEBUG("Credentials:");
+        YubiKeyUtil::initRange(resp, aData);
+        while ((tag = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
+            if (tag == TLV_TAG_LIST_ENTRY && data.size >= 1) {
+                YubiKeyOtp otp(QByteArray((char*)(data.bytes + 1),
+                    (int)data.size - 1));
+
+                otp.iType = toAuthType(data.bytes[0]);
+                otp.iAlg = toAuthAlgorithm(data.bytes[0]);
+
+                list.append(otp);
+                HDEBUG(list.size() << otp);
+            }
+        }
+        if (list.isEmpty()) {
+            // No need to request auth data if the list is empty
+            if (!iOtpListFetched) {
+                iOtpListFetched = true;
+                queueSignal(SignalOtpListFetchedChanged);
+            }
+            resetOtpList();
         } else {
-            HDEBUG("CALCULATE ALL ignored");
+            // Set the initial list (without the passwords) if we don't know
+            // anything about the contents of the YubiKey. Otherwise we will
+            // update the list when we have the credentials.
+            if (iOtpList.isEmpty()) {
+                setOtpList(mixOtpLists(list));
+            }
+            calculateAll(list);
         }
     } else {
-        REPORT_ERROR("CALCULATE ALL", aSw, aError);
+        resetOtpList();
     }
-}
-
-int
-YubiKey::Private::reset()
-{
-    if (canTransmit()) {
-        HDEBUG("RESET");
-        return iTag->transmit("RESET", &CMD_RESET, this,
-            G_STRINGIFY(RESET_RESP_METHOD), iCancel);
-    }
-    return 0;
+    emitQueuedSignals();
 }
 
 void
-YubiKey::Private::RESET_RESP_METHOD(
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
+YubiKey::Private::onCalculateAllFinished(
+    uint aResult,
+    const QByteArray& aData)
 {
-    if (!aError && aSw == RC_OK) {
-        HDEBUG("RESET ok" << qPrintable(YubiKeyUtil::toHex(aResp)));
-        // The data associated with the old YubiKey ID are no longer valid
-        YubiKeyUtil::configDir(iYubiKeyId).removeRecursively();
-        // Successful RESET changes the ID, need to re-SELECT the app
-        recheckAuthorization();
-        emitQueuedSignals();
-        Q_EMIT parentObject()->yubiKeyReset();
-    } else {
-        REPORT_ERROR("RESET", aSw, aError);
+    if (aResult == RC_OK) {
+        iLastReceivedPeriod = iLastRequestedPeriod;
+
+        // Calculate All Response Syntax
+        //
+        // For HOTP the response tag is 0x77 (No response). For credentials
+        // requiring touch the response tag is 0x7c (Response touch).
+        // The response will be a list of the following objects:
+        //
+        // +-----------------+----------------------------------------------+
+        // | Name tag        | 0x71 (TLV_TAG_NAME)                          |
+        // | Name length     | Length of name                               |
+        // | Name data       | Name                                         |
+        // +-----------------+----------------------------------------------+
+        // | Response tag    | 0x77 for HOTP, 0x7c for touch, 0x75 for full |
+        // |                 | response or 0x76 for truncated response      |
+        // | Response len    | Length of response + 1                       |
+        // | Digits          | Number of digits in the OATH code            |
+        // | Response data   | Response                                     |
+        // +-----------------+----------------------------------------------+
+        OtpList list(senderOpData<OtpListData>()->iOtpList);
+        YubiKeyOtp* otp = Q_NULLPTR;
+        uchar tag;
+        GUtilRange resp;
+        GUtilData data;
+
+        YubiKeyUtil::initRange(resp, aData);
+        while ((tag = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
+            switch (tag) {
+            // +---------------+------------------------------------------+
+            // | Name tag      | 0x71                                     |
+            // | Name length   | Length of name                           |
+            // | Name data     | Name                                     |
+            // +---------------+------------------------------------------+
+            case Private::TLV_TAG_NAME:
+                {
+                    const QByteArray name(YubiKeyUtil::toByteArray(&data));
+
+                    otp = Q_NULLPTR;
+                    for (OtpMutableListIterator it(list); it.hasNext();) {
+                        YubiKeyOtp& entry = it.next();
+
+                        if (entry.iName == name) {
+                            otp = &entry;
+                            break;
+                        }
+                    }
+                    if (!otp) {
+                        HDEBUG("Unknown OTP name " << name.constData());
+                    }
+                }
+                break;
+            // +---------------+------------------------------------------+
+            // | Response tag  | 0x77 for HOTP, 0x7c for touch, 0x75 for  |
+            // |               | full response or 0x76 for truncated one  |
+            // | Response len  | Length of response + 1                   |
+            // | Digits        | Number of digits in the OATH code        |
+            // | Response data | Response                                 |
+            // +---------------+------------------------------------------+
+            case Private::TLV_TAG_NO_RESPONSE:
+            case Private::TLV_TAG_RESPONSE_TOUCH:
+            case Private::TLV_TAG_RESPONSE_FULL:
+                if (otp && data.size > 0) {
+                    const YubiKeyOtp newOtp = updateOtpResponseFull(*otp, &data);
+
+                    if (*otp != newOtp) {
+                        *otp = newOtp;
+                        queueSignal(SignalOtpListChanged);
+                    }
+                    break;
+                }
+                /* fallthrough */
+            default:
+                HDEBUG("Ignoring tag" << hex << tag << qPrintable(YubiKeyUtil::toHex(&data)));
+                break;
+            }
+        }
+        if (!iOtpListFetched) {
+            iOtpListFetched = true;
+            queueSignal(SignalOtpListFetchedChanged);
+        }
+        setOtpList(mixOtpLists(list));
+        updateTotpTimer();
     }
+    emitQueuedSignals();
+}
+
+YubiKeyOp*
+YubiKey::Private::reset()
+{
+    // Pass the current YubiKeyId to the completion handler so that it can
+    // remove the old settings and credentials after a successful reset.
+    static const YubiKeyIo::APDU apdu("RESET", 0x00, 0x04, 0xde, 0xad);
+    YubiKeyOp* op = iOpQueue.queue(apdu, YubiKeyOpQueue::KeySpecific,
+        YubiKeyOpQueue::HighPriority, new BytesData(iOpQueue.yubiKeyId()));
+
+    // Need to reinitialize the whole thing after reset
+    connect(op, SIGNAL(opFinished(uint,QByteArray)),
+        SLOT(onResetFinished(uint,QByteArray)));
+    return op;
+}
+
+void
+YubiKey::Private::onSetCodeFinished(
+    uint aResult,
+    const QByteArray&)
+{
+    if (aResult == RC_OK) {
+        // Do not save it yet
+        iOpQueue.setPassword(senderOpData<StringData>()->iString, false);
+        emitQueuedSignals();
+    }
+}
+
+void
+YubiKey::Private::onResetFinished(
+    uint aResult,
+    const QByteArray&)
+{
+    if (aResult == RC_OK) {
+        // Remove old credentials and settings
+        const QByteArray oldId(senderOpData<BytesData>()->iBytes);
+        YubiKeyUtil::configDir(oldId).removeRecursively();
+        if (!iHaveBeenReset) {
+            iHaveBeenReset = true;
+            queueSignal(SignalHaveBeenResetChanged);
+        }
+        iOpQueue.reinitialize();
+        emitQueuedSignals();
+    }
+}
+
+void
+YubiKey::Private::onRefreshFinished(
+    uint aResult,
+    const QByteArray& aData)
+{
+    if (aResult == RC_OK) {
+        GUtilRange resp;
+        GUtilData data;
+
+        YubiKeyUtil::initRange(resp, aData);
+        if (YubiKeyUtil::readTLV(&resp, &data) == TLV_TAG_RESPONSE_FULL) {
+            HDEBUG("Response:" << qPrintable(YubiKeyUtil::toHex(&data)));
+            if (data.size > 4) {
+                const QByteArray name(senderOpData<BytesData>()->iBytes);
+                const int n = iOtpList.count();
+
+                for (int row = 0; row < n; row++) {
+                    const YubiKeyOtp& otp = iOtpList[row];
+
+                    if (otp.iName == name) {
+                        const YubiKeyOtp newOtp(updateOtpResponseFull(otp, &data));
+
+                        if (otp != newOtp) {
+                            iOtpList[row] = newOtp;
+                            queueSignal(SignalOtpListChanged);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        emitQueuedSignals();
+    }
+}
+
+// ==========================================================================
+// YubiKey
+// ==========================================================================
+
+YubiKey::YubiKey(
+    QObject* aParent) :
+    QObject(aParent),
+    iPrivate(new Private(this))
+{}
+
+YubiKey::~YubiKey()
+{
+    // Ops call back to YubiKey::Private, destroy them while we are still alive
+    iPrivate->iOpQueue.clear();
+}
+
+YubiKeyIo*
+YubiKey::yubiKeyIo() const
+{
+    return iPrivate->iIo.data();
+}
+
+void
+YubiKey::setYubiKeyIo(
+    YubiKeyIo* aIo)
+{
+    iPrivate->setIo(aIo);
+    iPrivate->emitQueuedSignals();
+}
+
+QByteArray
+YubiKey::yubiKeyId() const
+{
+    return iPrivate->iOpQueue.yubiKeyId();
+}
+
+QString
+YubiKey::yubiKeyIdString() const
+{
+    return HarbourUtil::toHex(iPrivate->iOpQueue.yubiKeyId());
+}
+
+uint
+YubiKey::yubiKeySerial() const
+{
+    return iPrivate->iOpQueue.yubiKeySerial();
+}
+
+uint
+YubiKey::yubiKeyVersion() const
+{
+    return YubiKeyUtil::versionToNumber(iPrivate->iOpQueue.yubiKeyFwVersion());
+}
+
+QString
+YubiKey::yubiKeyVersionString() const
+{
+    return YubiKeyUtil::versionToString(iPrivate->iOpQueue.yubiKeyFwVersion());
+}
+
+YubiKey::AuthAccess
+YubiKey::authAccess() const
+{
+    return (AuthAccess)iPrivate->iOpQueue.yubiKeyAuthAccess();
+}
+
+QList<YubiKeyOtp>
+YubiKey::otpList() const
+{
+    return iPrivate->iOtpList;
 }
 
 bool
-YubiKey::Private::submitPassword(
-    const QString aPassword,
+YubiKey::otpListFetched() const
+{
+    return iPrivate->iOtpListFetched;
+}
+
+bool
+YubiKey::present() const
+{
+    return iPrivate->iPresent;
+}
+
+bool
+YubiKey::updatingPasswords() const
+{
+    return iPrivate->iPasswordUpdateCount > 0;
+}
+
+bool
+YubiKey::haveTotpCodes() const
+{
+    return iPrivate->iHaveTotpCodes;
+}
+
+bool
+YubiKey::haveBeenReset() const
+{
+    return iPrivate->iHaveBeenReset;
+}
+
+qreal
+YubiKey::totpTimeLeft() const
+{
+    return iPrivate->iTotpTimeLeft;
+}
+
+void
+YubiKey::clear()
+{
+    iPrivate->iOpQueue.clear();
+}
+
+void
+YubiKey::authorize(
+    QString aPassword,
     bool aSave)
 {
-    if (iAuthAlgorithm != YubiKeyAlgorithm_Unknown) {
-        iAuth.disconnect(SIGNAL(accessKeyChanged(YubiKeyAlgorithm)), this,
-            SLOT(onAccessKeyChanged(YubiKeyAlgorithm)));
-        if (iAuth.setPassword(iAuthAlgorithm, aPassword, aSave)) {
-            updateAuthAccess(YubiKeyAuthAccessUnknown);
-        }
-        // Force re-check even if password didn't change
-        recheckAuthorization();
-        // Re-connect the signal
-        connect(&iAuth, SIGNAL(accessKeyChanged(YubiKeyAlgorithm)),
-            SLOT(onAccessKeyChanged(YubiKeyAlgorithm)));
+    iPrivate->iOpQueue.setPassword(aPassword, aSave);
+}
+
+bool
+YubiKey::cancelOp(
+    int aOpId)
+{
+    YubiKeyOp* op = iPrivate->iOpQueue.lookup(aOpId);
+
+    if (op) {
+        op->opCancel();
         return true;
     } else {
         return false;
     }
 }
 
-int
-YubiKey::Private::setPassword(
-    const QString aPassword)
+YubiKeyOp*
+YubiKey::getOp(
+    int aOpId)
 {
-    int id = 0;
+    return iPrivate->iOpQueue.lookup(aOpId);
+}
 
+YubiKeyOp*
+YubiKey::reset()
+{
+    return iPrivate->reset();
+}
+
+YubiKeyOp*
+YubiKey::deleteToken(
+    QByteArray aName,
+    YubiKeyOp::OpData* aData)
+{
+    // Delete Data
+    //
+    // +-----------------+----------------------------------------------+
+    // | Name tag        | 0x71 (TLV_TAG_NAME)                          |
+    // | Name length     | Length of name data                          |
+    // | Name data       | Name                                         |
+    // +-----------------+----------------------------------------------+
+    YubiKeyIo::APDU apdu("DELETE", 0x00, 0x02);
+    apdu.appendTLV(Private::TLV_TAG_NAME, aName);
+
+    YubiKeyOp* op = iPrivate->iOpQueue.queue(apdu, YubiKeyOpQueue::KeySpecific,
+        YubiKeyOpQueue::HighPriority, aData);
+
+    // Need to re-read the tokens after deletion
+    iPrivate->listAndCalculateAll();
+    return op;
+}
+
+YubiKeyOp*
+YubiKey::refreshToken(
+    QByteArray aName)
+{
+    // Calculate Data
+    //
+    // +------------------+---------------------+
+    // | Name tag         | 0x71                |
+    // | Name length      | Length of name data |
+    // | Name data        | Name                |
+    // +------------------+---------------------+
+    // | Challenge tag    | 0x74                |
+    // | Challenge length | Length of challenge |
+    // | Challenge data   | Challenge           |
+    // +------------------+---------------------+
+    const quint64 challenge = qToBigEndian(Private::currentPeriod());
+    YubiKeyIo::APDU apdu("CALCULATE", 0x00, 0xa2);
+
+    apdu.appendTLV(Private::TLV_TAG_NAME, aName);
+    apdu.appendTLV(Private::TLV_TAG_CHALLENGE, sizeof(challenge), &challenge);
+
+    YubiKeyOp* op = iPrivate->iOpQueue.queue(apdu, YubiKeyOpQueue::KeySpecific,
+        YubiKeyOpQueue::HighPriority, new Private::BytesData(aName));
+
+    // No need to re-read all tokens after calculating the specific one
+    iPrivate->connect(op, SIGNAL(opFinished(uint,QByteArray)),
+        SLOT(onRefreshFinished(uint,QByteArray)));
+
+    iPrivate->listAndCalculateAll();
+    return op;
+}
+
+YubiKeyOp*
+YubiKey::renameToken(
+    QByteArray aFrom,
+    QByteArray aTo,
+    YubiKeyOp::OpData* aData)
+{
+    // Rename credential
+    //
+    // +-----------------+----------------------------------------------+
+    // | Name tag        | 0x71 (TLV_TAG_NAME)                          |
+    // | Name length     | Length of name data, max 64 bytes            |
+    // | Name data       | The current credential's name                |
+    // +-----------------+----------------------------------------------+
+    // | Name tag        | 0x71 (TLV_TAG_NAME)                          |
+    // | Name length     | Length of name data, max 64 bytes            |
+    // | Name data       | The new credential's name                    |
+    // +-----------------+----------------------------------------------+
+    YubiKeyIo::APDU apdu("RENAME", 0x00, 0x05);
+    apdu.appendTLV(Private::TLV_TAG_NAME, aFrom);
+    apdu.appendTLV(Private::TLV_TAG_NAME, aTo);
+
+    YubiKeyOp* op = iPrivate->iOpQueue.queue(apdu, YubiKeyOpQueue::KeySpecific,
+        YubiKeyOpQueue::HighPriority, aData);
+
+    // Re-read the tokens after renaming
+    iPrivate->listAndCalculateAll();
+    return op;
+}
+
+YubiKeyOp*
+YubiKey::clearPassword()
+{
+    return setPassword(QString());
+}
+
+YubiKeyOp*
+YubiKey::setPassword(
+    QString aPassword)
+{
     //
     // https://developers.yubico.com/OATH/YKOATH_Protocol.html
     //
@@ -1100,934 +1097,105 @@ YubiKey::Private::setPassword(
     // application and the host software can calculate the same response
     // for that key.
     //
-    if (!canTransmit()) {
-        HDEBUG("Can't change the password");
-    } else if (!aPassword.isEmpty()) {
-        YubiKeyAlgorithm alg = iTag->yubiKeyAuthAlgorithm();
-        if (alg == YubiKeyAlgorithm_Unknown) {
-            alg = YubiKeyAlgorithm_Default;
-        }
-        const QByteArray key(YubiKeyAuth::calculateAccessKey(iYubiKeyId, alg, aPassword));
-        const QByteArray challenge(YubiKeyUtil::toByteArray(foil_random_bytes(CHALLENGE_LEN)));
+    YubiKeyIo::APDU apdu("SET_CODE", 0x00, 0x03);
+
+    if (aPassword.isEmpty()) {
+        apdu.appendTLV(Private::TLV_TAG_KEY); // Empty
+    } else {
+        const YubiKeyAlgorithm alg = iPrivate->iOpQueue.yubiKeyAuthAlgorithm();
+        const QByteArray challenge(YubiKeyUtil::randomAuthChallenge());
+        const QByteArray key(YubiKeyAuth::calculateAccessKey(yubiKeyId(), alg, aPassword));
         const QByteArray response(YubiKeyAuth::calculateResponse(key, challenge, alg));
 
-        HDEBUG("Host challenge:" << qPrintable(HarbourUtil::toHex(challenge)));
-        HDEBUG("Response:" << qPrintable(HarbourUtil::toHex(response)));
+        HDEBUG("Host challenge:" << challenge.toHex().constData());
+        HDEBUG("Response:" << response.toHex().constData());
 
         // Set Code Data
         //
-        // +------------------+---------------------+
-        // | Key tag          | 0x73                |
-        // | Key length       | Length of key + 1   |
-        // | Key algorithm    | Algorithm           |
-        // | Key data         | Key                 |
-        // +------------------+---------------------+
-        // | Challenge tag    | 0x74                |
-        // | Challenge length | Length of challenge |
-        // | Challenge data   | Challenge           |
-        // +------------------+---------------------+
-        // | Response tag     | 0x75                |
-        // | Response length  | Length of response  |
-        // | Response data    | Response            |
-        // +------------------+---------------------+
-        NfcIsoDepApdu cmd = CMD_SET_CODE;
-        QByteArray data;
+        // +-------------------+----------------------------------------+
+        // | Key tag           | 0x73 (TLV_TAG_KEY)                     |
+        // | Key length        | Length of key + 1                      |
+        // | Key algorithm     | Algorithm                              |
+        // | Key data          | Key                                    |
+        // +-------------------+----------------------------------------+
+        // | Challenge tag     | 0x74 (TLV_TAG_CHALLENGE)               |
+        // | Challenge length  | Length of challenge                    |
+        // | Challenge data    | Challenge                              |
+        // +-------------------+----------------------------------------+
+        // | Response tag      | 0x75 (TLV_TAG_RESPONSE_FULL)           |
+        // | Response length   | Length of response                     |
+        // | Response data     | Response                               |
+        // +-------------------+----------------------------------------+
 
-        data.reserve(key.size() + CHALLENGE_LEN + response.size() + 7);
-        data.append((char)TLV_TAG_KEY);
-        data.append((char)(key.size() + 1));
-        data.append((char)YubiKeyUtil::algorithmValue(alg));
-        data.append(key);
-        YubiKeyUtil::appendTLV(&data, TLV_TAG_CHALLENGE, challenge);
-        YubiKeyUtil::appendTLV(&data, TLV_TAG_RESPONSE_FULL, response);
+        apdu.data.reserve(key.size() + Private::CHALLENGE_LEN + response.size() + 7);
+        apdu.data.append((char)Private::TLV_TAG_KEY);
+        apdu.data.append((char)(key.size() + 1));
+        apdu.data.append((char)YubiKeyUtil::algorithmValue(alg));
+        apdu.data.append(key);
+        apdu.appendTLV(Private::TLV_TAG_CHALLENGE, challenge);
+        apdu.appendTLV(Private::TLV_TAG_RESPONSE_FULL, response);
+    }
 
-        cmd.data.bytes = (const guint8*)data.constData();
-        cmd.data.size = data.size();
-        HDEBUG("SET_CODE");
-        id = iTag->transmit("SET CODE", &cmd, this,
-            G_STRINGIFY(SET_CODE_RESP_METHOD), iCancel);
+    YubiKeyOp* op = iPrivate->iOpQueue.queue(apdu, YubiKeyOpQueue::KeySpecific,
+        YubiKeyOpQueue::HighPriority, new Private::StringData(aPassword));
+
+    iPrivate->connect(op, SIGNAL(opFinished(uint,QByteArray)),
+        SLOT(onSetCodeFinished(uint,QByteArray)));
+    return op;
+}
+
+YubiKeyOp*
+YubiKey::putToken(
+    int aType,
+    int aAlgorithm,
+    const QString aLabel,
+    const QString aSecret,
+    int aDigits,
+    int aCounter)
+{
+    const YubiKeyTokenType type = YubiKeyUtil::validType(aType);
+    const YubiKeyAlgorithm alg = YubiKeyUtil::validAlgorithm(aAlgorithm);
+    const QByteArray secret(HarbourBase32::fromBase32(aSecret));
+
+    if (type != YubiKeyTokenType_Unknown &&
+        alg != YubiKeyAlgorithm_Unknown &&
+        !secret.isEmpty()) {
+        YubiKeyToken token(type, alg, aLabel, QString(), secret, aDigits, aCounter);
+        YubiKeyOp* op = iPrivate->putToken(YubiKeyToken(type, alg, aLabel,
+            QString(), secret, aDigits, aCounter));
+
+        // Re-read the tokens after adding new one
+        iPrivate->listAndCalculateAll();
+        return op;
     } else {
-        HDEBUG("SET_CODE");
-        id = iTag->transmit("SET CODE", &CMD_SET_CODE, this,
-            G_STRINGIFY(REMOVE_CODE_RESP_METHOD), iCancel);
-    }
-    return id;
-}
-
-void
-YubiKey::Private::SET_CODE_RESP_METHOD(
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
-{
-    setCodeResp(aResp, aSw, aError, &YubiKey::passwordChanged);
-}
-
-void
-YubiKey::Private::REMOVE_CODE_RESP_METHOD(
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
-{
-    setCodeResp(aResp, aSw, aError, &YubiKey::passwordRemoved);
-}
-
-void
-YubiKey::Private::setCodeResp(
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError,
-    SignalEmitter aSignal)
-{
-    if (!aError && aSw == RC_OK) {
-        HDEBUG("SET_CODE ok" << qPrintable(YubiKeyUtil::toHex(aResp)));
-        iAuth.clearPassword();
-        recheckAuthorization();
-        Q_EMIT (parentObject()->*(aSignal))();
-    } else {
-        REPORT_ERROR("SET_CODE", aSw, aError);
+        return Q_NULLPTR;
     }
 }
 
-// ==========================================================================
-// YubiKey::Private::AuthorizeOperation
-// ==========================================================================
-
-YubiKey::Private::AuthorizeOperation::AuthorizeOperation(
-    YubiKey* aKey,
-    bool aRequireSelect) :
-    KeyOperation("Authorize", aKey, aRequireSelect),
-    iAlgorithm(YubiKeyAlgorithm_Unknown)
-{
-}
-
-bool
-YubiKey::Private::AuthorizeOperation::startOperation()
-{
-    //
-    // https://developers.yubico.com/OATH/YKOATH_Protocol.html
-    //
-    // VALIDATE INSTRUCTION
-    //
-    // Validates authentication (mutually). The challenge for this comes
-    // from the SELECT command. The response if computed by performing
-    // the correct HMAC function of that challenge with the correct key.
-    // A new challenge is then sent to the application, together with
-    // the response. The application will then respond with a similar
-    // calculation that the host software can verify.
-    //
-    YubiKey::Private* priv = iYubiKey->iPrivate;
-    YubiKeyTag* tag = priv->iTag;
-    const QByteArray challenge(tag->yubiKeyAuthChallenge());
-    bool started = true;
-
-    // Successful RESET cancels this operation, IDs must match
-    HASSERT(priv->iYubiKeyId == tag->yubiKeyId());
-
-    if (challenge.isEmpty()) {
-        priv->authorized(YubiKeyAuthAccessOpen);
-        finished();
-    } else {
-        iAlgorithm = tag->yubiKeyAuthAlgorithm();
-        iAccessKey = priv->iAuth.getAccessKey(iAlgorithm);
-        if (iAccessKey.isEmpty()) {
-            priv->updateAuthAccess(YubiKeyAuthAccessDenied);
-            HDEBUG("No" << iAlgorithm << "access key for" <<
-                qPrintable(HarbourUtil::toHex(priv->iYubiKeyId)));
-            finished();
-        } else {
-            const QByteArray response(YubiKeyAuth::calculateResponse(iAccessKey,
-                challenge, iAlgorithm));
-
-            iHostChallenge = YubiKeyUtil::toByteArray(foil_random_bytes(CHALLENGE_LEN));
-            HDEBUG("Response:" << qPrintable(HarbourUtil::toHex(response)));
-            HDEBUG("Host challenge:" << qPrintable(HarbourUtil::toHex(iHostChallenge)));
-
-            // Validate Data
-            //
-            // +------------------+---------------------+
-            // | Response tag     | 0x75                |
-            // | Response length  | Length of response  |
-            // | Response data    | Response            |
-            // +------------------+---------------------+
-            // | Challenge tag    | 0x74                |
-            // | Challenge length | Length of challenge |
-            // | Challenge data   | Challenge           |
-            // +------------------+---------------------+
-            NfcIsoDepApdu validateCmd = CMD_VALIDATE_TEMPLATE;
-            QByteArray validateData;
-
-            validateData.reserve(ACCESS_KEY_LEN + CHALLENGE_LEN + 4);
-            YubiKeyUtil::appendTLV(&validateData, TLV_TAG_RESPONSE_FULL, response);
-            YubiKeyUtil::appendTLV(&validateData, TLV_TAG_CHALLENGE, iHostChallenge);
-
-            validateCmd.data.bytes = (guint8*)validateData.constData();
-            validateCmd.data.size = validateData.size();
-            HDEBUG("VALIDATE");
-            started = transmit("VALIDATE", &validateCmd, validateResp);
-        }
-    }
-
-    priv->emitQueuedSignals();
-    return started;
-}
-
-void
-YubiKey::Private::AuthorizeOperation::validateResp(
-    Operation* aSelf,
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
-{
-    AuthorizeOperation* self = (AuthorizeOperation*)aSelf;
-    YubiKey* key = self->iYubiKey;
-    YubiKey::Private* priv = key->iPrivate;
-
-    // Response Codes
-    //
-    // +------------------+--------+
-    // | Success          | 0x9000 |
-    // +------------------+--------+
-    // | Auth not enabled | 0x6984 |
-    // +------------------+--------+
-    // | Wrong syntax     | 0x6a80 |
-    // +------------------+--------+
-    // | Generic error    | 0x6581 |
-    // +------------------+--------+
-    if (!aError && aResp) {
-        bool authorized = false;
-
-        HDEBUG("VALIDATE" << hex << aSw << qPrintable(YubiKeyUtil::toHex(aResp)));
-        if (aSw == RC_OK || aSw == RC_AUTH_NOT_ENABLED) {
-            QByteArray cardResp;
-            GUtilRange resp;
-            GUtilData data;
-            uchar tag;
-
-            resp.end = (resp.ptr = aResp->bytes) + aResp->size;
-            while ((tag = YubiKeyUtil::readTLV(&resp, &data)) != 0) {
-                if (tag == TLV_TAG_RESPONSE_FULL) {
-                    cardResp = QByteArray((char*)data.bytes, data.size);
-                    HDEBUG("Card response:" << qPrintable(HarbourUtil::toHex(cardResp)));
-                    break;
-                }
-            }
-
-            // Validate the response sent by the app
-            if (!cardResp.isEmpty()) {
-                const QByteArray hostResp(YubiKeyAuth::calculateResponse
-                    (self->iAccessKey, self->iHostChallenge, self->iAlgorithm));
-                HDEBUG("Host response:" << qPrintable(HarbourUtil::toHex(hostResp)));
-                if (hostResp == cardResp) {
-                    HDEBUG("Match!");
-                    authorized = true;
-                }
-            }
-        }
-
-        if (authorized) {
-            priv->authorized(YubiKeyAuthAccessGranted);
-        } else {
-            priv->updateAuthAccess(YubiKeyAuthAccessDenied);
-            if (aSw == RC_WRONG_SYNTAX) {
-                HDEBUG("Invalid password?");
-                priv->queueSignal(SignalAccessKeyNotAccepted);
-            }
-        }
-    } else {
-        REPORT_ERROR("VALIDATE", aSw, aError);
-    }
-    priv->emitQueuedSignals();
-    self->finished(!aError);
-}
-
-// ==========================================================================
-// YubiKey::Private::KeyOperation
-// ==========================================================================
-
-YubiKey::Private::KeyOperation::KeyOperation(
-    const char* aName,
-    YubiKey* aKey,
-    bool aRequireSelect) :
-    Operation(aName, aKey->iPrivate->iCancel, aRequireSelect),
-    iYubiKey(aKey->ref())
-{
-}
-
-YubiKey::Private::KeyOperation::~KeyOperation()
-{
-    iYubiKey->unref();
-}
-
-// ==========================================================================
-// YubiKey::Private::ListOperation
-// ==========================================================================
-
-YubiKey::Private::ListOperation::ListOperation(
-    YubiKey* aKey) :
-    KeyOperation("List", aKey)
-{
-}
-
-bool
-YubiKey::Private::ListOperation::startOperation()
-{
-    HDEBUG("LIST");
-    return transmit("LIST", &CMD_LIST, listResp);
-}
-
-void
-YubiKey::Private::ListOperation::listResp(
-    Operation* aSelf,
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
-{
-    ListOperation* self = (ListOperation*)aSelf;
-    YubiKey* key = self->iYubiKey;
-    YubiKey::Private* priv = key->iPrivate;
-
-    if (!aError && aResp && aSw == RC_OK) {
-        priv->updateOtpList(YubiKeyUtil::toByteArray(aResp));
-        if (!priv->iOtpListFetched) {
-            priv->iOtpListFetched = true;
-            priv->queueSignal(SignalOtpListFetchedChanged);
-        }
-
-        // Don't request auth data if the list is empty
-        if (!aResp->size) {
-            priv->updateOtpData(QByteArray());
-        } else {
-            CalculateAllApdu apdu;
-
-            HDEBUG("CALCULATE ALL");
-            if (self->transmit("CALCULATE ALL", priv->buildCalculateAllApdu(&apdu),
-                calculateAllResp)) {
-                // Not finished yet
-                priv->emitQueuedSignals();
-                return;
-            }
-        }
-        priv->emitQueuedSignals();
-    } else {
-        REPORT_ERROR("LIST", aSw, aError);
-    }
-    self->finished(!aError);
-}
-
-void
-YubiKey::Private::ListOperation::calculateAllResp(
-    Operation* aOperation,
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
-{
-    ListOperation* self = (ListOperation*)aOperation;
-    YubiKey* key = self->iYubiKey;
-    YubiKey::Private* priv = key->iPrivate;
-
-    if (!aError && aSw == RC_OK) {
-        priv->calculateAllOk(YubiKeyUtil::toByteArray(aResp));
-        priv->emitQueuedSignals();
-    } else {
-        REPORT_ERROR("CALCULATE ALL", aSw, aError);
-    }
-    self->finished(!aError);
-}
-
-// ==========================================================================
-// YubiKey::Private::RefreshOperation
-// ==========================================================================
-
-YubiKey::Private::RefreshOperation::RefreshOperation(
-    YubiKey* aKey,
-    const QStringList aNames) :
-    KeyOperation("Refresh", aKey),
-    iNames(aNames),
-    iNextName(0)
-{
-}
-
-bool
-YubiKey::Private::RefreshOperation::startOperation()
-{
-    return calculateNext();
-}
-
-bool
-YubiKey::Private::RefreshOperation::calculateNext()
-{
-    if (iNextName < iNames.count()) {
-        YubiKey::Private* priv = iYubiKey->iPrivate;
-        const quint64 challenge = htobe64(priv->iLastRequestedPeriod);
-
-        // Calculate Data
-        //
-        // +------------------+---------------------+
-        // | Name tag         | 0x71                |
-        // | Name length      | Length of name data |
-        // | Name data        | Name                |
-        // +------------------+---------------------+
-        // | Challenge tag    | 0x74                |
-        // | Challenge length | Length of challenge |
-        // | Challenge data   | Challenge           |
-        // +------------------+---------------------+
-        NfcIsoDepApdu calculateCmd = CMD_CALCULATE_TEMPLATE;
-        QByteArray calculateData;
-
-        iLastNameUtf8 = nameToUtf8(iNames.at(iNextName));
-        calculateData.reserve(iLastNameUtf8.size() + sizeof(challenge) + 4);
-        YubiKeyUtil::appendTLV(&calculateData, TLV_TAG_NAME, iLastNameUtf8);
-        YubiKeyUtil::appendTLV(&calculateData, TLV_TAG_CHALLENGE,
-            sizeof(challenge), &challenge);
-
-        calculateCmd.data.bytes = (guint8*)calculateData.constData();
-        calculateCmd.data.size = calculateData.size();
-        HDEBUG("CALCULATE" << iNextName << iNames.at(iNextName));
-        if (transmit("CALCULATE", &calculateCmd, calculateResp)) {
-            iNextName++;
-            return true;
-        }
-    }
-    return false;
-}
-
-void
-YubiKey::Private::RefreshOperation::calculateResp(
-    Operation* aOperation,
-    const GUtilData* aResp,
-    guint aSw,
-    const GError* aError)
-{
-    RefreshOperation* self = (RefreshOperation*)aOperation;
-    YubiKey* key = self->iYubiKey;
-    YubiKey::Private* priv = key->iPrivate;
-
-    if (!aError) {
-        if (aSw == RC_OK) {
-            GUtilRange resp;
-            GUtilData data;
-
-            HDEBUG("CALCULATE" << self->iLastNameUtf8.constData() << "ok");
-            resp.end = (resp.ptr = aResp->bytes) + aResp->size;
-            if (YubiKeyUtil::readTLV(&resp, &data) == TLV_TAG_RESPONSE_FULL) {
-                HDEBUG("Response:" << qPrintable(YubiKeyUtil::toHex(&data)));
-                priv->mergeOtpCode(self->iLastNameUtf8, &data);
-            }
-        } else{
-            HDEBUG("CALCULATE error" << hex << aSw);
-        }
-        // Try the next one anyway
-        if (self->calculateNext()) {
-            // Not finished yet
-            return;
-        }
-    } else {
-        REPORT_ERROR("CALCULATE", aSw, aError);
-    }
-    self->finished(!aError);
-}
-
-// ==========================================================================
-// YubiKey::Private::DeleteOperation
-// ==========================================================================
-
-YubiKey::Private::DeleteOperation::DeleteOperation(
-    YubiKey* aKey,
-    const QStringList aNames) :
-    KeyOperation("Delete", aKey),
-    iNames(aNames),
-    iNextName(0)
-{
-}
-
-bool
-YubiKey::Private::DeleteOperation::startOperation()
-{
-    return deleteNext();
-}
-
-bool
-YubiKey::Private::DeleteOperation::deleteNext()
-{
-    if (iNextName < iNames.count()) {
-        // Delete Data
-        //
-        // +-------------+---------------------+
-        // | Name tag    | 0x71                |
-        // | Name length | Length of name data |
-        // | Name data   | Name                |
-        // +-------------+---------------------+
-        const QByteArray nameUtf8(nameToUtf8(iNames.at(iNextName)));
-        NfcIsoDepApdu deleteCmd = CMD_DELETE_TEMPLATE;
-        QByteArray deleteData;
-
-        deleteData.reserve(nameUtf8.size() + 2);
-        YubiKeyUtil::appendTLV(&deleteData, TLV_TAG_NAME, nameUtf8);
-
-        deleteCmd.data.bytes = (guint8*)deleteData.constData();
-        deleteCmd.data.size = deleteData.size();
-        HDEBUG("DELETE" << iNextName << iNames.at(iNextName));
-        if (transmit("DELETE", &deleteCmd, deleteResp)) {
-            iNextName++;
-            return true;
-        }
-    }
-    return false;
-}
-
-void
-YubiKey::Private::DeleteOperation::deleteResp(
-    Operation* aOperation,
-    const GUtilData*,
-    guint aSw,
-    const GError* aError)
-{
-    DeleteOperation* self = (DeleteOperation*)aOperation;
-    YubiKey* key = self->iYubiKey;
-    YubiKey::Private* priv = key->iPrivate;
-
-    if (!aError) {
-#if HARBOUR_DEBUG
-        if (aSw == RC_OK) {
-            HDEBUG("DELETE ok");
-        } else{
-            HDEBUG("DELETE error" << hex << aSw);
-        }
-#endif // HARBOUR_DEBUG
-        // Try the next one anyway
-        if (self->deleteNext()) {
-            // Not finished yet
-            return;
-        } else {
-            priv->requestList(true);
-        }
-    } else {
-        REPORT_ERROR("DELETE", aSw, aError);
-    }
-    self->finished(!aError);
-}
-
-// ==========================================================================
-// YubiKey::Private::PutOperation
-// ==========================================================================
-
-YubiKey::Private::PutOperation::PutOperation(
-    YubiKey* aKey,
-    const QList<YubiKeyToken> aTokens) :
-    KeyOperation("Put", aKey),
-    iTokens(aTokens),
-    iNextToken(0)
-{
-}
-
-bool
-YubiKey::Private::PutOperation::startOperation()
-{
-    return putNext();
-}
-
-YubiKeyToken
-YubiKey::Private::PutOperation::lastToken() const
-{
-    return iNextToken > 0 ? iTokens.at(iNextToken - 1) : YubiKeyToken();
-}
-
-bool
-YubiKey::Private::PutOperation::putNext()
-{
-    if (iNextToken < iTokens.count()) {
-        // Put Data
-        //
-        // +-----------------+----------------------------------------------+
-        // | Name tag        | 0x71                                         |
-        // | Name length     | Length of name data, max 64 bytes            |
-        // | Name data       | Name                                         |
-        // +-----------------+----------------------------------------------+
-        // | Key tag         | 0x73                                         |
-        // | Key length      | Length of key data + 2                       |
-        // | Key algorithm   | High 4 bits is type, low 4 bits is algorithm |
-        // | Digits          | Number of digits in OATH code                |
-        // | Key data        | Key                                          |
-        // +-----------------+----------------------------------------------+
-        // | Property tag(o) | 0x78                                         |
-        // | Property(o)     | Property byte                                |
-        // +-----------------+----------------------------------------------+
-        // | IMF tag(o)      | 0x7a (only valid for HOTP)                   |
-        // | IMF length(o)   | Length of imf data, always 4 bytes           |
-        // | IMF data(o)     | Imf                                          |
-        // +-----------------+----------------------------------------------+
-
-        const YubiKeyToken token(iTokens.at(iNextToken));
-
-        // YubiKey seems to require at least 14 bytes of key data
-        // Pad the key with zeros if necessary
-        const QByteArray secret(token.secret());
-        const int keySize = qMax(secret.size(), (int) MinKeySize);
-        const int padding = keySize - secret.size();
-        const QByteArray nameUtf8(nameToUtf8(token.label()));
-        QByteArray data;
-        uchar type;
-
-        if (token.type() == YubiKeyTokenType_HOTP) {
-            type = TYPE_HOTP;
-            data.reserve(nameUtf8.size() + keySize + 16);
-        } else {
-            type = TYPE_TOTP;
-            data.reserve(nameUtf8.size() + keySize + 8);
-        }
-
-        YubiKeyUtil::appendTLV(&data, TLV_TAG_NAME, nameUtf8);
-        data.append((char)TLV_TAG_KEY);
-        data.append((char)(keySize + 2));
-        data.append((char)(type | YubiKeyUtil::algorithmValue(token.algorithm())));
-        data.append((char)token.digits());
-        data.append(secret);
-        for (int i = 0; i < padding; i++) {
-            data.append((char)0);
-        }
-
-        if (token.type() == YubiKeyTokenType_HOTP) {
-            const guint32 imf = htobe32(token.counter());
-
-            data.append((char)TLV_TAG_PROPERTY);
-            data.append((char)PROP_REQUIRE_TOUCH);
-            YubiKeyUtil::appendTLV(&data, TLV_TAG_IMF, sizeof(imf), &imf);
-        }
-
-        NfcIsoDepApdu putCmd = CMD_PUT_TEMPLATE;
-
-        putCmd.data.bytes = (const guint8*)data.constData();
-        putCmd.data.size = data.size();
-        HDEBUG("PUT" << iNextToken << token);
-        if (transmit("PUT", &putCmd, putResp)) {
-            iNextToken++;
-            return true;
-        }
-    }
-    return false;
-}
-
-void
-YubiKey::Private::PutOperation::putResp(
-    Operation* aOperation,
-    const GUtilData*,
-    guint aSw,
-    const GError* aError)
-{
-    PutOperation* self = (PutOperation*)aOperation;
-    YubiKey* key = self->iYubiKey;
-    YubiKey::Private* priv = key->iPrivate;
-
-    if (!aError) {
-        if (aSw == RC_OK) {
-            HDEBUG("PUT ok");
-        } else{
-            HDEBUG("PUT error" << hex << aSw);
-            Q_EMIT key->putFailed(self->lastToken(), aSw);
-        }
-        // Try the next one anyway
-        if (self->putNext()) {
-            // Not finished yet
-            return;
-        } else {
-            priv->requestList(true);
-        }
-    } else {
-        REPORT_ERROR("PUT", aSw, aError);
-    }
-    self->finished(!aError);
-}
-
-// ==========================================================================
-// YubiKey::Private::RenameOperation
-// ==========================================================================
-
-YubiKey::Private::RenameOperation::RenameOperation(
-    YubiKey* aKey,
-    const QString aFrom,
-    const QString aTo) :
-    KeyOperation("Rename", aKey),
-    iFrom(aFrom),
-    iTo(aTo)
-{
-}
-
-bool
-YubiKey::Private::RenameOperation::startOperation()
-{
-    // Rename credential
-    //
-    // +-----------------+----------------------------------------------+
-    // | Name tag        | 0x71                                         |
-    // | Name length     | Length of name data, max 64 bytes            |
-    // | Name data       | The current credential's name                |
-    // +-----------------+----------------------------------------------+
-    // | Name tag        | 0x71                                         |
-    // | Name length     | Length of name data, max 64 bytes            |
-    // | Name data       | The new credential's name                    |
-    // +-----------------+----------------------------------------------+
-
-    QByteArray data;
-
-    YubiKeyUtil::appendTLV(&data, TLV_TAG_NAME, nameToUtf8(iFrom));
-    YubiKeyUtil::appendTLV(&data, TLV_TAG_NAME, nameToUtf8(iTo));
-
-    NfcIsoDepApdu renameCmd = CMD_RENAME_TEMPLATE;
-
-    renameCmd.data.bytes = (const guint8*) data.constData();
-    renameCmd.data.size = data.size();
-    HDEBUG("RENAME" << iFrom << "=>" << iTo);
-    return transmit("RENAME", &renameCmd, renameResp);
-}
-
-void
-YubiKey::Private::RenameOperation::renameResp(
-    Operation* aOperation,
-    const GUtilData*,
-    guint aSw,
-    const GError* aError)
-{
-    RenameOperation* self = (RenameOperation*)aOperation;
-    YubiKey* key = self->iYubiKey;
-    YubiKey::Private* priv = key->iPrivate;
-
-    if (!aError) {
-#if HARBOUR_DEBUG
-        if (aSw == RC_OK) {
-            HDEBUG("RENAME ok");
-        } else{
-            HDEBUG("RENAME error" << hex << aSw);
-        }
-#endif // HARBOUR_DEBUG
-        priv->requestList(true);
-    } else {
-        REPORT_ERROR("RENAME", aSw, aError);
-    }
-    self->finished(!aError);
-}
-
-void
-YubiKey::Private::RenameOperation::finished(
-    bool aSuccess)
-{
-    if (aSuccess) {
-        Q_EMIT iYubiKey->tokenRenamed(iFrom, iTo);
-    }
-    KeyOperation::finished(aSuccess);
-}
-
-// ==========================================================================
-// YubiKey
-// ==========================================================================
-
-YubiKey::YubiKey(
-    const QByteArray aYubiKeyId) :
-    iPrivate(new Private(aYubiKeyId, this))
-{
-    HDEBUG(qPrintable(iPrivate->iYubiKeyIdString));
-
-    // Add it to the static map
-    HASSERT(!Private::gMap.value(aYubiKeyId));
-    Private::gMap.insert(aYubiKeyId, this);
-
-    // Update the path once the object has been fully set up
-    iPrivate->updatePath();
-    iPrivate->iFirstQueuedSignal = Private::SignalCount; // Clear queued events
-}
-
-YubiKey::~YubiKey()
-{
-    HDEBUG(qPrintable(iPrivate->iYubiKeyIdString));
-
-    // Remove it from the static map
-    HASSERT(Private::gMap.value(iPrivate->iYubiKeyId) == this);
-    Private::gMap.remove(iPrivate->iYubiKeyId);
-
-    delete iPrivate;
-}
-
-YubiKey*
-YubiKey::get(
-    const QByteArray aYubiKeyId)
-{
-    YubiKey* key = Private::gMap.value(aYubiKeyId);
-    if (key) {
-        return key->ref();
-    } else {
-        return new YubiKey(aYubiKeyId);
-    }
-}
-
-YubiKey*
-YubiKey::ref()
-{
-    iPrivate->iRef.ref();
-    return this;
-}
-
-void
-YubiKey::unref()
-{
-    if (!iPrivate->iRef.deref()) {
-        delete this;
-    }
-}
-
-bool
-YubiKey::present() const
-{
-    return iPrivate->iPresent;
-}
-
-YubiKeyAuthAccess
-YubiKey::authAccess() const
-{
-    return iPrivate->iAuthAccess;
-}
-
-const QByteArray
-YubiKey::yubiKeyId() const
-{
-    return iPrivate->iYubiKeyId;
-}
-
-const QString
-YubiKey::yubiKeyIdString() const
-{
-    return iPrivate->iYubiKeyIdString;
-}
-
-uint
-YubiKey::yubiKeyVersion() const
-{
-    return iPrivate->iYubiKeyVersionNumber;
-}
-
-const QString
-YubiKey::yubiKeyVersionString() const
-{
-    return iPrivate->iYubiKeyVersionString;
-}
-
-uint
-YubiKey::yubiKeySerial() const
-{
-    return iPrivate->iYubiKeySerial;
-}
-
-const QByteArray
-YubiKey::otpList() const
-{
-    return iPrivate->iOtpList;
-}
-
-const QString
-YubiKey::otpListString() const
-{
-    return iPrivate->iOtpListString;
-}
-
-const QByteArray
-YubiKey::otpData() const
-{
-    return iPrivate->iOtpData;
-}
-
-const QString
-YubiKey::otpDataString() const
-{
-    return iPrivate->iOtpDataString;
-}
-
-bool
-YubiKey::otpListFetched() const
-{
-    return iPrivate->iOtpListFetched;
-}
-
-const QStringList
-YubiKey::refreshableTokens() const
-{
-    return iPrivate->iRefreshableTokens;
-}
-
-const QList<int>
-YubiKey::operationIds() const
-{
-    return iPrivate->iOperationIds;
-}
-
-bool
-YubiKey::totpValid() const
-{
-    return iPrivate->iTotpValid;
-}
-
-int
-YubiKey::totpTimeLeft() const
-{
-    return iPrivate->iTotpTimeLeft;
-}
-
-int
-YubiKey::reset()
-{
-    return iPrivate->reset();
-}
-
-void
-YubiKey::refreshTokens(
-    const QStringList aTokens)
-{
-    if (!aTokens.isEmpty() && iPrivate->canTransmit()) {
-        HDEBUG(aTokens);
-        iPrivate->submit(new Private::RefreshOperation(this, aTokens));
-    }
-}
-
-void
-YubiKey::deleteTokens(
-    const QStringList aTokens)
-{
-    if (!aTokens.isEmpty() && iPrivate->canTransmit()) {
-        HDEBUG(aTokens);
-        iPrivate->submit(new Private::DeleteOperation(this, aTokens));
-    }
-}
-
-int
+QList<int>
 YubiKey::putTokens(
-    const QList<YubiKeyToken> aTokens)
+    QList<YubiKeyToken> aTokens)
 {
-    if (!aTokens.isEmpty() && iPrivate->canTransmit()) {
-        HDEBUG(aTokens);
-        return iPrivate->submit(new Private::PutOperation(this, aTokens));
+    QList<int> ids;
+    const int n = aTokens.count();
+
+    if (n > 0) {
+        ids.reserve(n);
+        for (int i = 0; i < n; i++) {
+            ids.append(iPrivate->putToken(aTokens.at(i))->opId());
+            HDEBUG(aTokens.at(i) << "=>" << ids.last());
+        }
+
+        // Re-read the tokens after adding new ones
+        iPrivate->listAndCalculateAll();
     }
-    return 0;
+    return ids;
 }
 
-int
-YubiKey::renameToken(
-    const QString aFrom,
-    const QString aTo)
+void
+YubiKey::listAndCalculateAll()
 {
-    return iPrivate->submit(new Private::RenameOperation(this, aFrom, aTo));
-}
-
-bool
-YubiKey::submitPassword(
-    const QString aPassword,
-    bool aSave)
-{
-    return iPrivate->submitPassword(aPassword, aSave);
-}
-
-int
-YubiKey::setPassword(
-    const QString aPassword)
-{
-    return iPrivate->setPassword(aPassword);
+    iPrivate->listAndCalculateAll();
 }
 
 #include "YubiKey.moc"

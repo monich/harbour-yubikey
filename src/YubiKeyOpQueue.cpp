@@ -106,12 +106,6 @@ operator<<(
 }
 #endif // HARBOUR_DEBUG
 
-// Make sure there're no typos in the method names
-#define OP_FINISHED_SIGNAL opFinished
-#define OP_STATE_CHANGED_SIGNAL opStateChanged
-Q_STATIC_ASSERT(&YubiKeyOp::OP_FINISHED_SIGNAL);
-Q_STATIC_ASSERT(&YubiKeyOp::OP_STATE_CHANGED_SIGNAL);
-
 // ==========================================================================
 // YubiKeyOpQueue::Entry (internal representation of YubiKeyOp)
 // ==========================================================================
@@ -166,16 +160,6 @@ class YubiKeyOpQueue::Private :
     Q_OBJECT
 
     friend class Entry;
-
-    struct DeferredSignal
-    {
-        QPointer<QObject> iObject;
-        const char* iMember;
-        QGenericArgument iArg0, iArg1;
-        uint iCode;
-        QByteArray iData;
-    };
-
     static const SignalEmitter gSignalEmitters[];
 
 public:
@@ -188,13 +172,6 @@ public:
     ~Private();
 
     void queueSetupSignal(YubiKeyOpQueueSignal);
-    void emitQueuedSignals();
-    void emitDeferredSignals();
-    void blockDeferredSignals();
-    void unblockDeferredSignals();
-    void deferredSignal(QObject*, const char*);
-    void deferredSignal(QObject*, const char*, uint, QByteArray);
-
     void clear();
     void releaseIo();
     void setState(State);
@@ -244,8 +221,6 @@ public Q_SLOTS:
 public:
     State iState;
     Queue iQueue;
-    QVector<DeferredSignal*> iDeferredSignals;
-    int iDeferSignals;
     Entry* iActiveOp;
     QPointer<YubiKeyIo> iIo;
     TxScopedPointer iTx;
@@ -275,7 +250,6 @@ YubiKeyOpQueue::Private::Private(
     YubiKeyOpQueue* aQueue) :
     YubiKeyOpQueuePrivateBase(aQueue, gSignalEmitters),
     iState(QueueIdle),
-    iDeferSignals(0),
     iActiveOp(Q_NULLPTR),
     iAuthAlgorithm(YubiKeyAlgorithm_Unknown),
     iAuthAccess(YubiKeyAuthAccessUnknown),
@@ -293,7 +267,6 @@ YubiKeyOpQueue::Private::~Private()
     for (Iterator it(iQueue); it.hasNext();) {
         delete it.next()->setOpState(YubiKeyOp::OpCancelled);
     }
-    qDeleteAll(iDeferredSignals);
 }
 
 inline
@@ -311,92 +284,6 @@ YubiKeyOpQueue::Private::queueSetupSignal(
     if (!iIoSetupDone) {
         iIoSetupDone = true;
         queueSignal(aSignal);
-    }
-}
-
-void
-YubiKeyOpQueue::Private::emitQueuedSignals()
-{
-    emitDeferredSignals();
-    HarbourParentSignalQueueObject::emitQueuedSignals();
-}
-
-void
-YubiKeyOpQueue::Private::emitDeferredSignals()
-{
-    QVector<DeferredSignal*> deferredSignals(iDeferredSignals);
-
-    iDeferredSignals.clear();
-    for (QMutableVectorIterator<DeferredSignal*> it(deferredSignals);it.hasNext();) {
-        DeferredSignal* deferred = it.next();
-
-        if (deferred->iObject) {
-            QMetaObject::invokeMethod(deferred->iObject.data(),
-                deferred->iMember, deferred->iArg0, deferred->iArg1);
-        }
-        delete deferred;
-    }
-}
-
-void
-YubiKeyOpQueue::Private::blockDeferredSignals()
-{
-    TODO("Are deferred signals needed at all?")
-#ifdef USE_DEFERRED_SIGNALS
-    iDeferSignals++;
-#endif
-}
-
-void
-YubiKeyOpQueue::Private::unblockDeferredSignals()
-{
-#ifdef USE_DEFERRED_SIGNALS
-    iDeferSignals--;
-    if (!iDeferSignals) {
-        emitDeferredSignals();
-    }
-#endif
-}
-
-void
-YubiKeyOpQueue::Private::deferredSignal(
-    QObject* aObject,
-    const char* aSignal)
-{
-    if (iDeferSignals) {
-        DeferredSignal* signal = new DeferredSignal;
-
-        signal->iObject = aObject;
-        signal->iMember = aSignal;
-        iDeferredSignals.append(signal);
-    } else {
-        QMetaObject::invokeMethod(aObject, aSignal);
-    }
-}
-
-void
-YubiKeyOpQueue::Private::deferredSignal(
-    QObject* aObject,
-    const char* aSignal,
-    uint aCode,
-    QByteArray aData)
-{
-    if (iDeferSignals) {
-        DeferredSignal* signal = new DeferredSignal;
-
-        // QGenericArgument simply stores the pointer,
-        // we need to make a copy of the argument first
-        signal->iObject = aObject;
-        signal->iMember = aSignal;
-        signal->iCode = aCode;
-        signal->iData = aData;
-        signal->iArg0 = Q_ARG(uint, signal->iCode);
-        signal->iArg1 = Q_ARG(QByteArray, signal->iData);
-        iDeferredSignals.append(signal);
-    } else {
-        QMetaObject::invokeMethod(aObject, aSignal,
-            Q_ARG(uint, aCode),
-            Q_ARG(QByteArray, aData));
     }
 }
 
@@ -924,11 +811,9 @@ YubiKeyOpQueue::Private::activeOpFinished(
     queueSignal(SignalOpIdsChanged);
     iActiveOp = Q_NULLPTR;
 
-    blockDeferredSignals();
-    deferredSignal(op, QT_STRINGIFY(OP_FINISHED_SIGNAL), aResult, aData);
+    Q_EMIT op->opFinished(aResult, aData);
     op->setOpState(YubiKeyOp::OpFinished);
     HarbourUtil::scheduleDeleteLater(op);
-    unblockDeferredSignals();
     tryToStartNextOp();
 }
 
@@ -1217,7 +1102,7 @@ YubiKeyOpQueue::Entry::setOpState(
     if (!isDone() && iOpState != aState) {
         HDEBUG(iId << iOpState << "=>" << aState);
         iOpState = aState;
-        owner()->deferredSignal(this, QT_STRINGIFY(OP_STATE_CHANGED_SIGNAL));
+        Q_EMIT opStateChanged();
     }
     return this;
 }

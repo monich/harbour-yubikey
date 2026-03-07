@@ -124,7 +124,6 @@ Page {
         //% "Wrong YubiKey"
         text: qsTrId("yubikey-popup-wrong_touch")
         iconSource: "images/yubikey-question.svg"
-        isPortrait: thisPage.isPortrait
         autoHide: !yubiKeyPresent
     }
 

@@ -361,10 +361,12 @@ Page {
 
         width: parent.width
         height: _fullHeight
-        interactive: pulleyMenu.visible
+        interactive: !popupPanel.expanded
 
         PullDownMenu {
             id: pulleyMenu
+
+            visible: pageFlickable.interactive
 
             Component.onCompleted: updateVisibility()
             onActiveChanged: updateVisibility()

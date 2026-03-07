@@ -7,10 +7,11 @@ DockedPanel {
     property alias text: label.text
     property alias iconSource: icon.source
     property alias minDisplayInterval: minDisplayIntervalTimer.interval
-    property bool isPortrait: true
     property bool autoHide: true
 
-    width: isPortrait ? parent.width : Math.ceil(2 * parent.width / 3)
+    width: (parent && parent.width) ?
+        Math.min(parent.width, Screen.sizeCategory > Screen.Medium ? Math.round(Screen.width * 0.7 + 2 * _padding) : Screen.width) :
+        Screen.width
     anchors.horizontalCenter: parent.horizontalCenter
     height: content.height + _padding
     animationDuration: 250
@@ -47,6 +48,7 @@ DockedPanel {
         id: content
 
         x: _padding
+        y: _padding
         width: parent.width - 2 * x
         height: Math.max(icon.height, label.height) + 2 * icon.y
         radius: ('topLeftCorner' in Screen) ? Screen.topLeftCorner.radius : Theme.paddingMedium

@@ -51,6 +51,8 @@
 #include <QtCore/QStandardPaths>
 #include <QtCore/QVector>
 
+#include <ctype.h>
+
 // ==========================================================================
 // YubiKeyUtil::SelectResponse
 // ==========================================================================
@@ -138,6 +140,8 @@ class YubiKeyUtil::Private
 {
 public:
     static QList<YubiKeyAlgorithm> allAlgorithms();
+    static QDir configRootDir();
+    static bool isHexString(const QString&);
 };
 
 QList<YubiKeyAlgorithm>
@@ -150,6 +154,33 @@ YubiKeyUtil::Private::allAlgorithms()
         list.append((YubiKeyAlgorithm) alg);
     }
     return list;
+}
+
+QDir
+YubiKeyUtil::Private::configRootDir()
+{
+    static const QDir root(QDir(QStandardPaths::writableLocation(
+        QStandardPaths::GenericDataLocation)).absoluteFilePath(YUBIKEY_APP_NAME));
+
+    return root;
+}
+
+bool
+YubiKeyUtil::Private::isHexString(
+    const QString& aString)
+{
+    const int len = aString.length();
+    if (!(len % 1)) {
+        const QChar* ucs = aString.constData();
+
+        for (int i = 0; i < len; i++) {
+            if (!isxdigit(ucs[i].toLatin1())) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
 }
 
 // ==========================================================================
@@ -165,11 +196,27 @@ QDir
 YubiKeyUtil::configDir(
     const QByteArray& aYubiKeyId)
 {
-    static const QDir configRoot(QDir(QStandardPaths::writableLocation(
-        QStandardPaths::GenericDataLocation)).
-        absoluteFilePath(YUBIKEY_APP_NAME));
+    return QDir(Private::configRootDir().filePath(HarbourUtil::toHex(aYubiKeyId)));
+}
 
-    return QDir(configRoot.filePath(HarbourUtil::toHex(aYubiKeyId)));
+QList<QDir>
+YubiKeyUtil::configDirs()
+{
+    const QDir root(Private::configRootDir());
+    const QStringList entries(root.entryList(QDir::Dirs |
+        QDir::NoDotAndDotDot | QDir::NoSymLinks));
+    const int n = entries.count();
+    QList<QDir> dirs;
+
+    dirs.reserve(n);
+    for (int i = 0; i < n; i++) {
+        const QString name(entries.at(i));
+
+        if (Private::isHexString(name)) {
+            dirs.append(root.filePath(name));
+        }
+    }
+    return dirs;
 }
 
 void

@@ -96,7 +96,7 @@
     <message id="yubikey-menu-delete_remorse">
         <source>Deleting</source>
         <extracomment>Remorse popup text</extracomment>
-        <translation></translation>
+        <translation>Deleting</translation>
     </message>
     <message id="yubikey-remorse-clearing_password">
         <source>Clearing YubiKey password</source>
@@ -427,6 +427,36 @@
         <source>Touch YubiKey to rename this token</source>
         <extracomment>List item text</extracomment>
         <translation>Touch YubiKey to rename this token</translation>
+    </message>
+    <message id="yubikey-settings-version">
+        <source>Version %1</source>
+        <extracomment>Small description label (app version)</extracomment>
+        <translation>Version %1</translation>
+    </message>
+    <message id="yubikey-settings-header">
+        <source>Settings</source>
+        <extracomment>Page header</extracomment>
+        <translation>Settings</translation>
+    </message>
+    <message id="yubikey-settings-section_saved_passwords">
+        <source>Saved YubiKey passwords</source>
+        <extracomment>Settings section header</extracomment>
+        <translation>Saved YubiKey passwords</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords_header-yubikey_id">
+        <source>YubiKey</source>
+        <extracomment>List header</extracomment>
+        <translation>YubiKey</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords_header-last_access">
+        <source>Last access</source>
+        <extracomment>List header</extracomment>
+        <translation>Last access</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords-none">
+        <source>No YubiKey passwords stored on this device</source>
+        <extracomment>Info label</extracomment>
+        <translation>No YubiKey passwords stored on this device</translation>
     </message>
 </context>
 </TS>

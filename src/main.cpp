@@ -38,6 +38,7 @@
  */
 
 #include "YubiKeyAppSettings.h"
+#include "YubiKeyAuthDataModel.h"
 #include "YubiKeyDefs.h"
 #include "YubiKey.h"
 #include "YubiKeyImportModel.h"
@@ -86,6 +87,7 @@ static void register_types(const char* uri, int v1 = 1, int v2 = 0)
     REGISTER_TYPE(uri, v1, v2, HarbourSingleImageProvider);
     REGISTER_TYPE(uri, v1, v2, NfcMode);
     REGISTER_TYPE(uri, v1, v2, YubiKey);
+    REGISTER_TYPE(uri, v1, v2, YubiKeyAuthDataModel);
     REGISTER_TYPE(uri, v1, v2, YubiKeyImportModel);
     REGISTER_TYPE(uri, v1, v2, YubiKeyIoManager);
     REGISTER_TYPE(uri, v1, v2, YubiKeyNdefHandler);

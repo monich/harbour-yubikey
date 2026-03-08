@@ -428,5 +428,35 @@
         <extracomment>List item text</extracomment>
         <translation type="unfinished">Håll telefonen mot YubiKey för att byta namn på den denna token</translation>
     </message>
+    <message id="yubikey-settings-version">
+        <source>Version %1</source>
+        <extracomment>Small description label (app version)</extracomment>
+        <translation>Version %1</translation>
+    </message>
+    <message id="yubikey-settings-header">
+        <source>Settings</source>
+        <extracomment>Page header</extracomment>
+        <translation>Inställningar</translation>
+    </message>
+    <message id="yubikey-settings-section_saved_passwords">
+        <source>Saved YubiKey passwords</source>
+        <extracomment>Settings section header</extracomment>
+        <translation type="unfinished">Sparade YubiKey-lösenord</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords_header-yubikey_id">
+        <source>YubiKey</source>
+        <extracomment>List header</extracomment>
+        <translation type="unfinished">YubiKey</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords_header-last_access">
+        <source>Last access</source>
+        <extracomment>List header</extracomment>
+        <translation type="unfinished">Senaste åtkomst</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords-none">
+        <source>No YubiKey passwords stored on this device</source>
+        <extracomment>Info label</extracomment>
+        <translation type="unfinished">Inga YubiKey-lösenord lagrade på den här enheten</translation>
+    </message>
 </context>
 </TS>

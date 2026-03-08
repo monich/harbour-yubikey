@@ -55,6 +55,8 @@
 #include <QtCore/QMapIterator>
 #include <QtCore/QSettings>
 
+#include <utime.h>
+
 // ==========================================================================
 // YubiKeyAuth::Private
 // ==========================================================================
@@ -288,6 +290,20 @@ YubiKeyAuth::operator=(
     return *this;
 }
 
+bool
+YubiKeyAuth::operator == (
+    const YubiKeyAuth& aAuth)
+{
+    return iPrivate == aAuth.iPrivate;
+}
+
+bool
+YubiKeyAuth::operator != (
+    const YubiKeyAuth& aAuth)
+{
+    return iPrivate != aAuth.iPrivate;
+}
+
 void
 YubiKeyAuth::clear()
 {
@@ -336,6 +352,14 @@ YubiKeyAuth::calculateResponse(
     return calculateResponse(getAccessKey(aAlgorithm), aChallenge, aAlgorithm);
 }
 
+QDateTime
+YubiKeyAuth::lastAccessTime() const
+{
+    return iPrivate ?
+        QFileInfo(iPrivate->iAuthFile).lastModified() :
+        QDateTime();
+}
+
 bool
 YubiKeyAuth::setPassword(
     YubiKeyAlgorithm aAlgorithm,
@@ -348,13 +372,26 @@ YubiKeyAuth::setPassword(
 }
 
 void
-YubiKeyAuth::clearPassword()
+YubiKeyAuth::forgetPassword()
 {
     if (iPrivate) {
         iPrivate->clear();
     }
 }
 
+void
+YubiKeyAuth::touch()
+{
+    if (iPrivate) {
+        const QByteArray fname(iPrivate->iAuthFile.toLocal8Bit());
+
+        if (utime(fname.constData(), NULL)) {
+            HDEBUG("Failed to modify" << fname.constData() << "mod time");
+        }
+    }
+}
+
+// static
 QByteArray
 YubiKeyAuth::calculateAccessKey(
     QByteArray aYubiKeyId,
@@ -374,6 +411,7 @@ YubiKeyAuth::calculateAccessKey(
         YubiKeyConstants::KEY_ITER_COUNT, YubiKeyConstants::ACCESS_KEY_LEN));
 }
 
+// static
 QByteArray
 YubiKeyAuth::calculateResponse(
     QByteArray aAccessKey,
@@ -395,6 +433,26 @@ YubiKeyAuth::calculateResponse(
         return YubiKeyUtil::toByteArray(foil_hmac_free_to_bytes(hmac));
     }
     return QByteArray();
+}
+
+// static
+QList<YubiKeyAuth>
+YubiKeyAuth::all()
+{
+    const QList<QDir> dirs(YubiKeyUtil::configDirs());
+    const int n = dirs.count();
+    QList<YubiKeyAuth> authList;
+
+    for (int i = 0; i < n; i++) {
+        const QDir& dir = dirs.at(i);
+        const QByteArray id(QByteArray::fromHex(dir.dirName().toLatin1()));
+        const QFileInfo authFile(dir.filePath(Private::AUTH_FILE));
+
+        if (!id.isEmpty() && authFile.isFile() && authFile.isReadable()) {
+            authList.append(YubiKeyAuth(id));
+        }
+    }
+    return authList;
 }
 
 #include "YubiKeyAuth.moc"

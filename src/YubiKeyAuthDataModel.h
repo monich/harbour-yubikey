@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2022-2026 Slava Monich <slava@monich.com>
- * Copyright (C) 2022 Jolla Ltd.
+ * Copyright (C) 2026 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -37,52 +36,33 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_AUTH_H
-#define _YUBIKEY_AUTH_H
+#ifndef _YUBIKEY_AUTH_DATA_MODEL_H
+#define _YUBIKEY_AUTH_DATA_MODEL_H
 
-#include "YubiKeyTypes.h"
+#include "YubiKeyAuth.h"
 
-#include <QtCore/QByteArray>
-#include <QtCore/QDateTime>
-#include <QtCore/QList>
-#include <QtCore/QObject>
+#include <QAbstractListModel>
 
-class YubiKeyAuth :
-    public QObject
+class YubiKeyAuthDataModel :
+    public QAbstractListModel
 {
     Q_OBJECT
 
 public:
-    YubiKeyAuth(QByteArray);
-    YubiKeyAuth(const YubiKeyAuth&);
-    YubiKeyAuth();
-    ~YubiKeyAuth();
+    explicit YubiKeyAuthDataModel(QObject* aParent = Q_NULLPTR);
+    ~YubiKeyAuthDataModel();
 
-    YubiKeyAuth& operator = (const YubiKeyAuth&);
-    bool operator == (const YubiKeyAuth&);
-    bool operator != (const YubiKeyAuth&);
+    Q_INVOKABLE void refresh();
+    Q_INVOKABLE bool remove(QString);
 
-    void clear();
-    bool isValid() const;
-    QByteArray yubiKeyId() const;
-    QByteArray getAccessKey(YubiKeyAlgorithm) const;
-    QByteArray calculateResponse(QByteArray, YubiKeyAlgorithm) const;
-    QDateTime lastAccessTime() const;
-    bool setAccessKey(YubiKeyAlgorithm, QByteArray, bool);
-    bool setPassword(YubiKeyAlgorithm, QString, bool);
-    void forgetPassword();
-    void touch();
-
-    static QList<YubiKeyAuth> all();
-    static QByteArray calculateAccessKey(QByteArray, YubiKeyAlgorithm, QString);
-    static QByteArray calculateResponse(QByteArray, QByteArray, YubiKeyAlgorithm);
-
-Q_SIGNALS:
-    void accessKeyChanged(YubiKeyAlgorithm);
+    // QAbstractItemModel
+    QHash<int,QByteArray> roleNames() const Q_DECL_OVERRIDE;
+    int rowCount(const QModelIndex&) const Q_DECL_OVERRIDE;
+    QVariant data(const QModelIndex&, int) const Q_DECL_OVERRIDE;
 
 private:
     class Private;
     Private* iPrivate;
 };
 
-#endif // _YUBIKEY_AUTH_H
+#endif // _YUBIKEY_AUTH_DATA_MODEL_H

@@ -81,6 +81,7 @@ public:
     static const QList<YubiKeyAlgorithm> AllAlgorithms;
 
     static QDir configDir(const QByteArray&);
+    static QList<QDir> configDirs();
 
     static void initRange(GUtilRange&, const QByteArray&);
     static QByteArray hashUtf8(const QByteArray&);

@@ -66,6 +66,7 @@ HEADERS += \
     src/YubiKey.h \
     src/YubiKeyAppSettings.h \
     src/YubiKeyAuth.h \
+    src/YubiKeyAuthDataModel.h \
     src/YubiKeyDefs.h \
     src/YubiKeyConstants.h \
     src/YubiKeyImportModel.h \
@@ -90,6 +91,7 @@ SOURCES += \
     src/YubiKey.cpp \
     src/YubiKeyAppSettings.cpp \
     src/YubiKeyAuth.cpp \
+    src/YubiKeyAuthDataModel.cpp \
     src/YubiKeyImportModel.cpp \
     src/YubiKeyIo.cpp \
     src/YubiKeyIoManager.cpp \
@@ -265,6 +267,7 @@ SOURCES += \
 
 HARBOUR_QML_COMPONENTS = \
     $${HARBOUR_LIB_QML}/HarbourHighlightIcon.qml \
+    $${HARBOUR_LIB_QML}/HarbourIconTextButton.qml \
     $${HARBOUR_LIB_QML}/HarbourMarqueeText.qml \
     $${HARBOUR_LIB_QML}/HarbourPasswordInputField.qml \
     $${HARBOUR_LIB_QML}/HarbourTextFlip.qml

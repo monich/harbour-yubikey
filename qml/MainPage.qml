@@ -12,11 +12,13 @@ Page {
     property var yubiKey
     property Page yubiKeyPage
 
-    readonly property bool _targetPresent: NfcAdapter.targetPresent
     property bool _initialized
+    property real _flipAngle
+    property real _unflipAngle
 
     onStatusChanged: {
-        if (status === PageStatus.Active) {
+        switch (status) {
+        case PageStatus.Active:
             yubiKey.clear()
             if (!_initialized) {
                 _initialized = true
@@ -24,6 +26,10 @@ Page {
             } else if (yubiKeyPage) {
                 yubiKeyPage = null
             }
+            break
+        case PageStatus.Inactive:
+            _unflip(true)
+            break
         }
     }
 
@@ -45,34 +51,34 @@ Page {
             // function returning true if it's ok with the current YubiKey state
             var nextPage = pageStack.nextPage(thisPage)
             if (!nextPage || !nextPage.isOk()) {
-                var method = nextPage ? replacePage : pushPage
+                var method = nextPage ? _replacePage : _pushPage
                 switch (yubiKey.authAccess) {
                 case YubiKey.AccessNotActivated:
-                    createYubiKeyNotActivatedPage(method)
+                    _createYubiKeyNotActivatedPage(method)
                     break
                 case YubiKey.AccessDenied:
-                    createYubiAuthorizePage(method)
+                    _createYubiAuthorizePage(method)
                     break
                 case YubiKey.AccessOpen:
                 case YubiKey.AccessGranted:
-                    createYubiKeyPage(method)
+                    _createYubiKeyPage(method)
                     break
                 }
             }
         }
     }
 
-    function createYubiKeyNotActivatedPage(createPage) {
+    function _createYubiKeyNotActivatedPage(createPage) {
         yubiKeyPage = null
         createPage(yubiKeyNotActivatedPageComponent)
     }
 
-    function createYubiAuthorizePage(createPage) {
+    function _createYubiAuthorizePage(createPage) {
         yubiKeyPage = null
         createPage(yubiKeyAuthorizePageComponent)
     }
 
-    function createYubiKeyPage(createPage) {
+    function _createYubiKeyPage(createPage) {
         // Make a copy of these 3 fields.
         // They never as long as we're dealing with the same YubiKey.
         var yubiKeyId = yubiKey.yubiKeyId
@@ -85,15 +91,34 @@ Page {
         })
     }
 
-    function pushPage(comp,prop) {
+    function _pushPage(comp,prop) {
         return pageStack.push(comp, prop)
     }
 
-    function replacePage(comp,prop) {
+    function _replacePage(comp,prop) {
         for (var p = pageStack.nextPage(thisPage); p; p = pageStack.nextPage(p)) {
             p.canNavigateForward = true
         }
         return pageStack.replaceAbove(thisPage, comp, prop)
+    }
+
+    function _unflip(immediate) {
+        if (flipable.flipped) {
+            var rotateX = isPortrait ? 0 : 1
+            if (rotation.axis.x !== rotateX) {
+                rotation.axis.x = rotateX
+                rotation.axis.y = rotateX ? 0 : 1
+                // This fixes a weird problem - after flipping, rotating and flipping again
+                // the back panel gets rotated 180 degrees around z axis
+                backPanelRotation.angle = isPortrait ? 180 : -180
+            }
+            rotation.angle = isPortrait ? 180 : -180
+            _unflipAngle = isPortrait ? 360 : -360
+            flipable.flipped = false
+        }
+        if (immediate) {
+            flipAnimation.complete()
+        }
     }
 
     Component {
@@ -123,54 +148,94 @@ Page {
         }
     }
 
-    Item {
-        width: isPortrait ? Screen.width : Screen.height
+
+    Flipable {
+        id: flipable
+
+        width: parent.width
         height: isPortrait ? Screen.height : Screen.width
-        visible: NfcSystem.valid
 
-        BusyIndicator {
-            id: busyIndicator
+        property bool flipped
 
-            anchors.centerIn: parent
-            size: BusyIndicatorSize.Large
-            running: _targetPresent
-            visible: opacity > 0
-        }
+        front: MainPageFront {
+            id: frontPanel
 
-        YubiKeyImage {
-            id: image
-
-            width: height
-            height: Screen.width
-            opacity: label.opacity
-        }
-
-        InfoLabel {
-            id: label
-
-            anchors {
-                bottom: parent.bottom
-                right: parent.right
-                rightMargin: Theme.horizontalPageMargin
+            anchors.fill: parent
+            onFlip: {
+                backPanel.refresh()
+                rotation.axis.x = isPortrait ? 0 : 1
+                rotation.axis.y = isPortrait ? 1 : 0
+                rotation.angle = 0
+                backPanelRotation.angle = 0
+                _flipAngle = isPortrait ? 180 : -180
+                flipable.flipped = true
             }
-            verticalAlignment: Text.AlignVCenter
-            opacity: (_initialized && !busyIndicator.running) ? 1 : 0
-            width: isPortrait ? (parent.width - 2 * Theme.horizontalPageMargin) :
-                (parent.width - image.width - Theme.horizontalPageMargin)
-            height: isPortrait ? (parent.height - image.height*2/3) : parent.height
-            visible: opacity > 0
-            text: _targetPresent ? "" :
-                //: Info label
-                //% "NFC not supported"
-                !NfcSystem.present ? qsTrId("yubikey-info-nfc_not_supported") :
-                //: Hint label
-                //% "Touch a YubiKey NFC"
-                NfcSystem.enabled ? qsTrId("yubikey-info-touch_hint") :
-                //: Info label
-                //% "NFC is off"
-                qsTrId("yubikey-info-nfc_disabled")
+        }
 
-            Behavior on opacity { FadeAnimation { }}
+        back: MainPageBack {
+            id: backPanel
+
+            anchors.fill: parent
+            transform: Rotation {
+                id: backPanelRotation
+
+                origin {
+                    x: backPanel.width/2
+                    y: backPanel.height/2
+                }
+                axis {
+                    x: 0
+                    y: 0
+                    z: 1
+                }
+            }
+            onFlip: {
+                frontPanel.showSettingsButton()
+                _unflip(false)
+            }
+        }
+
+        transform: Rotation {
+            id: rotation
+
+            origin {
+                x: flipable.width/2
+                y: flipable.height/2
+            }
+            axis {
+                x: 0
+                y: 1
+                z: 0
+            }
+        }
+
+        states: [
+            State {
+                when: !flipable.flipped
+
+                PropertyChanges {
+                    target: rotation
+                    angle: _unflipAngle
+                }
+            },
+            State {
+                when: flipable.flipped
+
+                PropertyChanges {
+                    target: rotation
+                    angle: _flipAngle
+                }
+            }
+        ]
+
+        transitions: Transition {
+            NumberAnimation {
+                id: flipAnimation
+
+                target: rotation
+                property: "angle"
+                duration: 500
+            }
         }
     }
 }

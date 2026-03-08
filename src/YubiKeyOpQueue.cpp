@@ -895,7 +895,7 @@ YubiKeyOpQueue::Private::onSelectFinished(
 
                 if (iAuthChallenge.isEmpty()) {
                     // Authorization isn't required
-                    iAuth.clearPassword();
+                    iAuth.forgetPassword();
                     setAuthAccess(YubiKeyAuthAccessOpen);
                     authorized();
                     setState(startNextOp());
@@ -995,6 +995,7 @@ YubiKeyOpQueue::Private::onValidateFinished(
             HDEBUG("Host response:" << hostResp.toHex().constData());
             if (hostResp == cardResp) {
                 HDEBUG("Match!");
+                iAuth.touch();
                 setAuthAccess(YubiKeyAuthAccessGranted);
                 authorized();
                 setState(startNextOp());

@@ -281,7 +281,7 @@
     <message id="yubikey-remember_password-description">
         <source>The password is stored in a hashed form from which the original password cannot be recovered. However, this hashed form can still be copied and used for accessing your key even without knowing the original password. By choosing to store the password, you accept that risk.</source>
         <extracomment>Switch description</extracomment>
-        <translation>Пароль хранится в форме, из которой невозможно восстановить оригинальный пароль. Однако и этой формы очевидно достаточно для того, чтобы получить доступ к вашему ключу, так что если она попадёт не в те руки, то извините. Сохраняя пароль, вы берёте на себя этот риск.</translation>
+        <translation>Пароль хранится в форме, из которой невозможно восстановить оригинальный пароль. Однако и этой формы очевидно достаточно для того, чтобы получить доступ к вашему YubiKey, так что если она попадёт не в те руки, то извините. Сохраняя пароль, вы берёте на себя этот риск.</translation>
     </message>
     <message id="yubikey-confirm_password-prompt-change">
         <source>Please type in your new YubiKey password one more time</source>
@@ -427,6 +427,36 @@
         <source>Touch YubiKey to rename this token</source>
         <extracomment>List item text</extracomment>
         <translation>Поднесите YubiKey для переименования</translation>
+    </message>
+    <message id="yubikey-settings-version">
+        <source>Version %1</source>
+        <extracomment>Small description label (app version)</extracomment>
+        <translation>Версия %1</translation>
+    </message>
+    <message id="yubikey-settings-header">
+        <source>Settings</source>
+        <extracomment>Page header</extracomment>
+        <translation>Настройки</translation>
+    </message>
+    <message id="yubikey-settings-section_saved_passwords">
+        <source>Saved YubiKey passwords</source>
+        <extracomment>Settings section header</extracomment>
+        <translation>Сохранённые пароли к YubiKey</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords_header-yubikey_id">
+        <source>YubiKey</source>
+        <extracomment>List header</extracomment>
+        <translation>YubiKey</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords_header-last_access">
+        <source>Last access</source>
+        <extracomment>List header</extracomment>
+        <translation>Использован</translation>
+    </message>
+    <message id="yubikey-settings-saved_passwords-none">
+        <source>No YubiKey passwords stored on this device</source>
+        <extracomment>Info label</extracomment>
+        <translation>Всё чисто, никаких паролей на устройстве не хранится</translation>
     </message>
 </context>
 </TS>

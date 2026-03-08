@@ -61,7 +61,7 @@
     role(Steam,steam) \
     role(Favorite,favorite) \
     role(EntryOp,entryOp) \
-    role(EntryOpState,entryOpState)
+    last(EntryOpState,entryOpState)
 
 #define MODEL_ROLES(role) \
     MODEL_ROLES_(role,role,role)

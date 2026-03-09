@@ -448,10 +448,10 @@
         <extracomment>List header</extracomment>
         <translation type="unfinished">YubiKey</translation>
     </message>
-    <message id="yubikey-settings-saved_passwords_header-last_access">
-        <source>Last access</source>
+    <message id="yubikey-settings-saved_passwords_header-last_used">
+        <source>Last used</source>
         <extracomment>List header</extracomment>
-        <translation type="unfinished">Senaste åtkomst</translation>
+        <translation type="unfinished">Senast använd</translation>
     </message>
     <message id="yubikey-settings-saved_passwords-none">
         <source>No YubiKey passwords stored on this device</source>

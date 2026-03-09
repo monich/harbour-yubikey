@@ -100,8 +100,8 @@ SilicaFlickable {
                         color: yubiKeyIdHeaderLabel.color
                         horizontalAlignment: Text.AlignRight
                         //: List header
-                        //% "Last access"
-                        text: qsTrId("yubikey-settings-saved_passwords_header-last_access")
+                        //% "Last used"
+                        text: qsTrId("yubikey-settings-saved_passwords_header-last_used")
                     }
 
                     Rectangle {

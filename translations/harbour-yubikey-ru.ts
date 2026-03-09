@@ -448,8 +448,8 @@
         <extracomment>List header</extracomment>
         <translation>YubiKey</translation>
     </message>
-    <message id="yubikey-settings-saved_passwords_header-last_access">
-        <source>Last access</source>
+    <message id="yubikey-settings-saved_passwords_header-last_used">
+        <source>Last used</source>
         <extracomment>List header</extracomment>
         <translation>Использован</translation>
     </message>

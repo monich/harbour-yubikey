@@ -117,6 +117,7 @@ YubiKeyIoTx::Result::operator!=(
     return code != aResult.code;
 }
 
+#if HARBOUR_DEBUG
 QDebug
 operator<<(
     QDebug aDebug,
@@ -128,6 +129,7 @@ operator<<(
     sw[1] = aResult.sw2();
     return (aDebug << qPrintable(HarbourUtil::toHex(sw, sizeof(sw)).toUpper()));
 }
+#endif
 
 // ==========================================================================
 // YubiKeyIo::IoLock
@@ -310,3 +312,29 @@ YubiKeyIo::isTerminalState(
     }
     return false;
 }
+
+#if HARBOUR_DEBUG
+#define IO_STATES(s) \
+    s(IoUnknown) \
+    s(IoReady) \
+    s(IoLocking) \
+    s(IoLocked) \
+    s(IoActive) \
+    s(IoTargetInvalid) \
+    s(IoError) \
+    s(IoTargetGone)
+
+QDebug
+operator<<(
+    QDebug aDebug,
+    const YubiKeyIo::IoState& aState)
+{
+    switch (aState) {
+#define STATE_(state) case YubiKeyIo::state: \
+    return (aDebug << #state);
+        IO_STATES(STATE_)
+#undef STATE_
+    }
+    return (aDebug << (int)aState);
+}
+#endif // HARBOUR_DEBUG

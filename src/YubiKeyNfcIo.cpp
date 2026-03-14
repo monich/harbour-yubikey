@@ -48,32 +48,6 @@
 #include "HarbourDebug.h"
 #include "HarbourUtil.h"
 
-#define IO_STATES(s) \
-    s(IoUnknown) \
-    s(IoReady) \
-    s(IoLocking) \
-    s(IoLocked) \
-    s(IoActive) \
-    s(IoTargetInvalid) \
-    s(IoError) \
-    s(IoTargetGone)
-
-#if HARBOUR_DEBUG
-QDebug
-operator<<(
-    QDebug aDebug,
-    YubiKeyIo::IoState aState)
-{
-    switch (aState) {
-    #define STATE_(state) case YubiKeyNfcIo::state: \
-    return (aDebug << #state);
-    IO_STATES(STATE_)
-    #undef STATE_
-    }
-    return (aDebug << (int)aState);
-}
-#endif // HARBOUR_DEBUG
-
 // ==========================================================================
 // YubiKeyNfcIo::Lock declaration
 // ==========================================================================

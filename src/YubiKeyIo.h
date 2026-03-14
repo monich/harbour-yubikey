@@ -241,6 +241,7 @@ protected:
 };
 
 QDebug operator<<(QDebug, const YubiKeyIoTx::Result&);
+QDebug operator<<(QDebug aDebug, const YubiKeyIo::IoState&);
 Q_DECLARE_METATYPE(YubiKeyIoTx::Result)
 
 #endif // _YUBIKEY_IO_H

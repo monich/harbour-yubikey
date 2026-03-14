@@ -690,12 +690,11 @@ YubiKeyOpQueue::Private::select()
 void
 YubiKeyOpQueue::Private::authorized()
 {
-    // When we get authorized for the time, issue the yubiKeyConnected
-    // signal right away, to give the handler the chance to queue the
-    // LIST command before we switch to the Idle state and release the
-    // lock (because after re-acquiring the lock, we would have to go
-    // through the same SELECT/VALIDATE procedure again, which would
-    // slow things down)
+    // When we get authorized for the first time, issue the yubiKeyConnected
+    // signal right away, to give the handler a chance to queue the LIST
+    // command before we switch to the Idle state and release the lock
+    // (because after re-acquiring the lock, we would have to go through
+    // the same SELECT/VALIDATE sequence again, which would slow things down)
     queueSetupSignal(SignalYubiKeyConnected);
     emitQueuedSignal(SignalYubiKeyConnected);
 }

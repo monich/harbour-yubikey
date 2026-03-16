@@ -72,11 +72,6 @@ public:
 // YubiKeyNfcIo::Private
 // ==========================================================================
 
-//#define ASYNC_DEACTIVATION
-#ifdef ASYNC_DEACTIVATION
-#define FINISH_DEACTIVATION_SLOT finishDeactivationSlot
-#endif
-
 class YubiKeyNfcIo::Private :
     public QObject
 {
@@ -100,15 +95,6 @@ public:
     bool checkIsoDepHB();
     void updateTagState();
     bool updateSerial();
-    void finishDeactivation();
-
-#ifdef ASYNC_DEACTIVATION
-    void finishDeactivationLater();
-private:
-    bool iDeactivationQueued = 0;
-public Q_SLOTS:
-    void FINISH_DEACTIVATION_SLOT();
-#endif
 
 public:
     IoState iState;
@@ -317,33 +303,6 @@ YubiKeyNfcIo::Private::updateTagState()
     }
 }
 
-void
-YubiKeyNfcIo::Private::finishDeactivation()
-{
-    if (!iActiveTx && iState == IoActive) {
-        setState(iLock ? IoLocked : IoReady);
-        emitQueuedSignals();
-    }
-}
-
-#ifdef ASYNC_DEACTIVATION
-void
-YubiKeyNfcIo::Private::finishDeactivationLater()
-{
-    if (!iDeactivationQueued) {
-        iDeactivationQueued = QMetaObject::invokeMethod(this,
-            QT_STRINGIFY(FINISH_DEACTIVATION_SLOT), Qt::QueuedConnection);
-    }
-}
-
-void
-YubiKeyNfcIo::Private::FINISH_DEACTIVATION_SLOT()
-{
-    iDeactivationQueued = false;
-    finishDeactivation();
-}
-#endif
-
 /* static */
 void
 YubiKeyNfcIo::Private::isoDepValidEvent(
@@ -495,6 +454,7 @@ public:
     void cancelled();
     void failed();
     void finished(Result, QByteArray);
+    void emitQueuedIoSignals();
 
     // YubiKeyTx
     TxState txState() const  Q_DECL_OVERRIDE;
@@ -564,11 +524,11 @@ void
 YubiKeyNfcIo::Tx::activate()
 {
     if (!iActive) {
-        YubiKeyNfcIo::Private* ioPriv = nfcIo()->iPrivate;
+        YubiKeyNfcIo::Private* priv = nfcIo()->iPrivate;
 
         iActive = true;
-        ioPriv->iActiveTx++;
-        ioPriv->setState(IoActive);
+        priv->iActiveTx++;
+        priv->setState(IoActive);
     }
 }
 
@@ -577,20 +537,13 @@ YubiKeyNfcIo::Tx::deactivate(
     bool aMayDelete)
 {
     if (iActive) {
-        YubiKeyNfcIo::Private* ioPriv = nfcIo()->iPrivate;
+        YubiKeyNfcIo::Private* priv = nfcIo()->iPrivate;
 
         iActive = false;
-        HASSERT(ioPriv->iActiveTx > 0);
-        ioPriv->iActiveTx--;
-        if (!ioPriv->iActiveTx) {
-#ifdef ASYNC_DEACTIVATION
-            // Don't switch the state just yet, postpone it
-            // to give the completion handler a chance to
-            // submit the next transaction
-            ioPriv->finishDeactivationLater();
-#else
-            ioPriv->finishDeactivation();
-#endif
+        HASSERT(priv->iActiveTx > 0);
+        priv->iActiveTx--;
+        if (!priv->iActiveTx && priv->iState == IoActive) {
+            priv->setState(priv->iLock ? IoLocked : IoReady);
         }
         if (aMayDelete && iAutoDelete) {
             HarbourUtil::scheduleDeleteLater(this);
@@ -627,6 +580,13 @@ YubiKeyNfcIo::Tx::finished(
     }
 }
 
+inline
+void
+YubiKeyNfcIo::Tx::emitQueuedIoSignals()
+{
+    nfcIo()->iPrivate->emitQueuedSignals();
+}
+
 /* static */
 void
 YubiKeyNfcIo::Tx::cancelHandler(
@@ -635,6 +595,7 @@ YubiKeyNfcIo::Tx::cancelHandler(
 {
     aSelf->cancelled();
     aSelf->deactivate();
+    aSelf->emitQueuedIoSignals();
 }
 
 /* static */
@@ -663,6 +624,7 @@ YubiKeyNfcIo::Tx::responseHandler(
         self->finished(code, data);
     }
     self->deactivate();
+    self->emitQueuedIoSignals();
 }
 
 // ==========================================================================

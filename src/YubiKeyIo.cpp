@@ -152,7 +152,7 @@ YubiKeyIo::APDU::APDU(
     uchar aIns,
     uchar aP1,
     uchar aP2,
-    uchar aLe) :
+    uint aLe) :
     name(aName),
     cla(aCla),
     ins(aIns),
@@ -169,7 +169,7 @@ YubiKeyIo::APDU::APDU(
     uchar aP2,
     const uchar* aData,
     uint aSize,
-    uchar aLe) :
+    uint aLe) :
     name(aName),
     cla(aCla),
     ins(aIns),
@@ -186,7 +186,7 @@ YubiKeyIo::APDU::APDU(
     uchar aP1,
     uchar aP2,
     const QByteArray& aData,
-    uchar aLe) :
+    uint aLe) :
     name(aName),
     cla(aCla),
     ins(aIns),

@@ -151,11 +151,11 @@ public:
         uchar p1;
         uchar p2;
         QByteArray data;
-        uchar le;
+        uint le;
 
-        APDU(const char*, uchar, uchar, uchar aP1 = 0, uchar aP2 = 0, uchar aLe = 0);
-        APDU(const char*, uchar, uchar, uchar, uchar, const uchar*, uint, uchar aLe = 0);
-        APDU(const char*, uchar, uchar, uchar, uchar, const QByteArray&, uchar aLe = 0);
+        APDU(const char*, uchar, uchar, uchar aP1 = 0, uchar aP2 = 0, uint aLe = 0);
+        APDU(const char*, uchar, uchar, uchar, uchar, const uchar*, uint, uint aLe = 0);
+        APDU(const char*, uchar, uchar, uchar, uchar, const QByteArray&, uint aLe = 0);
         bool equals(const APDU&) const;
         bool sameAs(const APDU&) const;
         void appendTLV(uchar);

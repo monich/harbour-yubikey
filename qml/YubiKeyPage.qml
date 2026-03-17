@@ -10,7 +10,7 @@ Page {
 
     property var yubiKey
     property string yubiKeyId
-    property string yubiKeySerial
+    property int yubiKeySerial
     property string yubiKeyFirmware
 
     readonly property bool yubiKeyPresent: yubiKey.present

@@ -7,19 +7,20 @@ import "harbour"
 CoverBackground {
     id: cover
 
-    property Page yubiKeyPage
+    property var yubiKey
+    property Page mainPage
 
     signal clearCardInfo()
 
-    readonly property bool _haveYubiKey: !!yubiKeyPage
-    readonly property real _passwordTimeLeft: _haveYubiKey ? yubiKeyPage.totpTimeLeft : 0
-    readonly property bool _passwordMarkedForRefresh: _haveYubiKey && yubiKeyPage.favoriteMarkedForRefresh
-    readonly property bool _yubiKeyPresent: _haveYubiKey && yubiKeyPage.yubiKeyPresent
+    readonly property Page _yubiKeyPage: !!mainPage ? mainPage.yubiKeyPage : null
+    readonly property bool _haveYubiKeyPage: !!_yubiKeyPage
+    readonly property real _passwordTimeLeft: _haveYubiKeyPage ? _yubiKeyPage.totpTimeLeft : 0
+    readonly property bool _passwordMarkedForRefresh: _haveYubiKeyPage && _yubiKeyPage.favoriteMarkedForRefresh
 
-    readonly property string name: _haveYubiKey ? yubiKeyPage.favoriteName : ""
-    readonly property string password: _haveYubiKey ? yubiKeyPage.favoritePassword : ""
-    readonly property int passwordType: _haveYubiKey ? yubiKeyPage.favoriteTokenType : YubiKey.TypeUnknown
-    readonly property bool accessDenied: _haveYubiKey && yubiKeyPage.yubiKey.authAccess === YubiKey.AccessDenied
+    readonly property string name: _haveYubiKeyPage ? _yubiKeyPage.favoriteName : ""
+    readonly property string password: _haveYubiKeyPage ? _yubiKeyPage.favoritePassword : ""
+    readonly property int passwordType: _haveYubiKeyPage ? _yubiKeyPage.favoriteTokenType : YubiKey.TypeUnknown
+    readonly property bool accessDenied: !!yubiKey && yubiKey.authAccess === YubiKey.AccessDenied
 
     property string _displayName
     property string _displayPassword
@@ -51,7 +52,7 @@ CoverBackground {
     Flipable {
         id: flipable
 
-        readonly property bool flipped: _haveYubiKey
+        readonly property bool flipped: _haveYubiKeyPage || (!!mainPage && mainPage.status !== PageStatus.Active)
         property bool flipping
         property real targetAngle
 
@@ -134,7 +135,7 @@ CoverBackground {
                 source: "images/yubikey-lock.svg"
                 highlightColor: Theme.primaryColor
                 visible: opacity > 0
-                opacity: (_yubiKeyPresent ? 1 : 0.4) * (1.0 - yubiKeyProgress.opacity)
+                opacity: ((yubiKey && yubiKey.present) ? 1 : 0.4) * (1.0 - yubiKeyProgress.opacity)
             }
 
             YubiKeyProgress {
@@ -244,7 +245,7 @@ CoverBackground {
     }
 
     CoverActionList {
-        enabled: _haveYubiKey && !flipable.flipping
+        enabled: _haveYubiKeyPage && !flipable.flipping
         CoverAction {
             iconSource: "image://theme/icon-cover-cancel"
             onTriggered: cover.clearCardInfo()

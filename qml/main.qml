@@ -10,14 +10,14 @@ ApplicationWindow {
     //: Application title
     //% "YubiKey"
     readonly property string title: qsTrId("yubikey-app_name")
-
-    property Page mainPage
+    property alias yubiKey: key
+    property Page mainPage: null
 
     initialPage: Component {
         MainPage {
             id: mainPage
 
-            yubiKey: key
+            yubiKey: thisApp.yubiKey
             allowedOrientations: thisApp.allowedOrientations
             Component.onCompleted: thisApp.mainPage = mainPage
         }
@@ -25,8 +25,9 @@ ApplicationWindow {
 
     cover: Component {
         CoverPage {
-            yubiKeyPage: !!mainPage ? mainPage.yubiKeyPage : null
-            onClearCardInfo: pageStack.pop(mainPage, PageStackAction.Immediate)
+            yubiKey: thisApp.yubiKey
+            mainPage: thisApp.mainPage
+            onClearCardInfo: pageStack.pop(thisApp.mainPage, PageStackAction.Immediate)
         }
     }
 

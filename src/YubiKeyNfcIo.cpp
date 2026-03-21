@@ -53,7 +53,7 @@
 // ==========================================================================
 
 class YubiKeyNfcIo::Lock :
-    public IoLock
+    public IoLockData
 {
     void unlock();
 
@@ -65,7 +65,7 @@ public:
 
 public:
     Private* iPrivate;
-    NfcTagClientLock* iLock;
+    NfcTagClientLock* iNfcLock;
 };
 
 // ==========================================================================
@@ -89,7 +89,7 @@ public:
     void setState(IoState);
     void emitQueuedSignals();
 
-    YubiKeyIo::Lock requestLock();
+    IoLock requestLock();
 
     void handleLockResponse(NfcTagClientLock*, const GError*);
     bool checkIsoDepHB();
@@ -106,7 +106,7 @@ public:
     gulong iTagEventId;
     NfcIsoDepClient* iIsoDep;
     gulong iIsoDepValidId;
-    YubiKeyNfcIo::Lock* iLock;
+    Lock* iLock;
     int iActiveTx;
 };
 
@@ -194,7 +194,7 @@ YubiKeyNfcIo::Private::setState(
     }
 }
 
-YubiKeyIo::Lock
+YubiKeyIo::IoLock
 YubiKeyNfcIo::Private::requestLock()
 {
     if (!iLock && !isTerminalState(iState)) {
@@ -213,7 +213,7 @@ YubiKeyNfcIo::Private::requestLock()
             setState(IoError);
         }
     }
-    return YubiKeyIo::Lock(iLock);
+    return IoLock(iLock);
 }
 
 /* static */
@@ -252,8 +252,8 @@ YubiKeyNfcIo::Private::handleLockResponse(
         // iLock may be null if the lock has been released before
         // it has actually been acquired
         if (iLock) {
-            HASSERT(!iLock->iLock);
-            iLock->iLock = nfc_tag_client_lock_ref(aLock);
+            HASSERT(!iLock->iNfcLock);
+            iLock->iNfcLock = nfc_tag_client_lock_ref(aLock);
             switch (iState) {
             case IoReady:
             case IoLocking:
@@ -390,7 +390,7 @@ YubiKeyNfcIo::Lock::Lock(
     Private* aPrivate,
     NfcTagClientLock* aLock) :
     iPrivate(aPrivate),
-    iLock(nfc_tag_client_lock_ref(aLock))
+    iNfcLock(nfc_tag_client_lock_ref(aLock))
 {}
 
 YubiKeyNfcIo::Lock::~Lock()
@@ -426,9 +426,9 @@ YubiKeyNfcIo::Lock::drop()
 void
 YubiKeyNfcIo::Lock::unlock()
 {
-    if (iLock) {
-        nfc_tag_client_lock_unref(iLock);
-        iLock = Q_NULLPTR;
+    if (iNfcLock) {
+        nfc_tag_client_lock_unref(iNfcLock);
+        iNfcLock = Q_NULLPTR;
     }
 }
 
@@ -661,10 +661,10 @@ YubiKeyNfcIo::ioSerial() const
     return iPrivate->iSerial;
 }
 
-YubiKeyIo::Lock
+YubiKeyIo::IoLock
 YubiKeyNfcIo::ioLock()
 {
-    YubiKeyIo::Lock lock(iPrivate->requestLock());
+    IoLock lock(iPrivate->requestLock());
 
     iPrivate->emitQueuedSignals();
     return lock;

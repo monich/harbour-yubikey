@@ -226,7 +226,7 @@ public:
     TxScopedPointer iTx;
     QByteArray iRespBuf;
     YubiKeyAuth iAuth;
-    YubiKeyIo::Lock iLock;
+    YubiKeyIo::IoLock iLock;
     QByteArray iAuthChallenge;
     YubiKeyAlgorithm iAuthAlgorithm;
     YubiKeyAuthAccess iAuthAccess;

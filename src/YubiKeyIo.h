@@ -129,19 +129,19 @@ public:
     };
 
     // Shared lock
-    class IoLock
+    class IoLockData
     {
-        Q_DISABLE_COPY(IoLock)
-        friend class QExplicitlySharedDataPointer<IoLock>;
+        Q_DISABLE_COPY(IoLockData)
+        friend class QExplicitlySharedDataPointer<IoLockData>;
         mutable QAtomicInt ref;
 
     public:
-        virtual ~IoLock();
+        virtual ~IoLockData();
 
     protected:
-        IoLock();
+        IoLockData();
     };
-    typedef QExplicitlySharedDataPointer<IoLock> Lock;
+    typedef QExplicitlySharedDataPointer<IoLockData> IoLock;
 
     // ISO/IEC 7816-4 compliant APDU
     struct APDU {
@@ -167,7 +167,7 @@ public:
     virtual const char* ioPath() const = 0;
     virtual IoState ioState() const = 0;
     virtual uint ioSerial() const = 0;
-    virtual Lock ioLock() = 0;
+    virtual IoLock ioLock() = 0;
     virtual YubiKeyIoTx* ioTransmit(const APDU&) = 0;
 
     // Utilities

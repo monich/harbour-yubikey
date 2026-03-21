@@ -132,13 +132,13 @@ operator<<(
 #endif
 
 // ==========================================================================
-// YubiKeyIo::IoLock
+// YubiKeyIo::IoLockData
 // ==========================================================================
 
-YubiKeyIo::IoLock::~IoLock()
+YubiKeyIo::IoLockData::~IoLockData()
 {}
 
-YubiKeyIo::IoLock::IoLock() :
+YubiKeyIo::IoLockData::IoLockData() :
     ref(0)
 {}
 

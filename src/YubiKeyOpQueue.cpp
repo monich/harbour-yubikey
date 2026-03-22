@@ -106,6 +106,9 @@ operator<<(
 }
 #endif // HARBOUR_DEBUG
 
+typedef QScopedPointer<YubiKeyIoTx, HarbourUtil::ScopedPointerDeleteLater>
+    TxScopedPointer;
+
 // ==========================================================================
 // YubiKeyOpQueue::Entry (internal representation of YubiKeyOp)
 // ==========================================================================
@@ -120,8 +123,12 @@ public:
     ~Entry();
 
     Private* owner() const;
-    Entry* setOpState(OpState);
+    void setOpState(OpState);
     const char* name() const;
+    bool start();
+    void resetTx();
+    bool hasQueuedSignals() const;
+    void emitQueuedSignals();
 
     // YubiKeyOp
     OpData* opData() const Q_DECL_OVERRIDE;
@@ -129,12 +136,26 @@ public:
     int opId() const Q_DECL_OVERRIDE;
     void opCancel() Q_DECL_OVERRIDE;
 
+private:
+    bool setTx(YubiKeyIoTx*);
+    void sendRemaining(uint);
+
+private Q_SLOTS:
+    void onTxCancelled();
+    void onTxFailed();
+    void onTxFinished(YubiKeyIoTx::Result, const QByteArray&);
+
 public:
     const YubiKeyIo::APDU iApdu;
     const Flags iFlags;
     const Priority iPriority;
     const int iId;
+    bool iTxFinished;
+    TxScopedPointer iTx;
+    YubiKeyIoTx::Result iTxResult;
+    QByteArray iTxRespBuf;
     OpData* iOpData;
+    OpState iPrevOpState;
     OpState iOpState;
 };
 
@@ -166,12 +187,12 @@ public:
     typedef QQueue<Entry*> Queue;
     typedef QListIterator<Entry*> Iterator;
     typedef QMutableListIterator<Entry*> MutableIterator;
-    typedef QScopedPointer<YubiKeyIoTx, HarbourUtil::ScopedPointerDeleteLater> TxScopedPointer;
 
     Private(YubiKeyOpQueue*);
     ~Private();
 
     void queueSetupSignal(YubiKeyOpQueueSignal);
+    void emitQueuedSignals();
     void clear();
     void releaseIo();
     void setState(State);
@@ -182,10 +203,8 @@ public:
 
     bool haveKeySpecificOp();
     void tryToStartNextOp();
-    State startNextOp();
-    void cancelActiveOp();
+    void startNextOp();
     void requeueActiveOp();
-    void activeOpFinished(uint, const QByteArray&);
     void activeOpFailed();
     YubiKeyOp* lookup(int);
     YubiKeyOp* queue(Entry*);
@@ -193,9 +212,9 @@ public:
 
     QList<int> opIds();
     void setIo(YubiKeyIo*);
-    bool setTx(YubiKeyIoTx*);
+    bool setInternalTx(YubiKeyIoTx*);
     void setPassword(const QString&, bool);
-    void resetTx();
+    void resetInternalTx();
     void revalidate();
     void prepare();
     void authorized();
@@ -205,7 +224,6 @@ public:
     QByteArray calculateAuthResponse(const QByteArray&, const QByteArray&);
     YubiKeyIo::APDU makeValidateApdu(const QByteArray&);
     void validate(const QByteArray&);
-    void sendRemaining(uint);
 
 public Q_SLOTS:
     void onIoStateChanged(YubiKeyIo::IoState);
@@ -214,17 +232,14 @@ public Q_SLOTS:
     void onSelectFinished(YubiKeyIoTx::Result, const QByteArray&);
     void onValidateFailed();
     void onValidateFinished(YubiKeyIoTx::Result, const QByteArray&);
-    void onTxFailed();
-    void onTxFinished(YubiKeyIoTx::Result, const QByteArray&);
-    void onRemainingFinished(YubiKeyIoTx::Result, const QByteArray&);
+    void onActiveOpStateChanged();
 
 public:
     State iState;
     Queue iQueue;
     Entry* iActiveOp;
     QPointer<YubiKeyIo> iIo;
-    TxScopedPointer iTx;
-    QByteArray iRespBuf;
+    TxScopedPointer iInternalTx;
     YubiKeyAuth iAuth;
     YubiKeyIo::IoLock iLock;
     QByteArray iAuthChallenge;
@@ -260,13 +275,9 @@ YubiKeyOpQueue::Private::Private(
 
 YubiKeyOpQueue::Private::~Private()
 {
-    resetTx();
-    if (iActiveOp) {
-        delete iActiveOp->setOpState(YubiKeyOp::OpCancelled);
-    }
-    for (Iterator it(iQueue); it.hasNext();) {
-        delete it.next()->setOpState(YubiKeyOp::OpCancelled);
-    }
+    resetInternalTx();
+    delete iActiveOp;
+    qDeleteAll(iQueue);
 }
 
 inline
@@ -345,15 +356,6 @@ YubiKeyOpQueue::Private::haveKeySpecificOp()
 }
 
 void
-YubiKeyOpQueue::Private::cancelActiveOp()
-{
-    iActiveOp->setOpState(YubiKeyOp::OpCancelled);
-    HarbourUtil::scheduleDeleteLater(iActiveOp);
-    iActiveOp = Q_NULLPTR;
-    queueSignal(SignalOpIdsChanged);
-}
-
-void
 YubiKeyOpQueue::Private::requeueActiveOp()
 {
     if (iActiveOp) {
@@ -377,6 +379,7 @@ YubiKeyOpQueue::Private::requeueActiveOp()
             iActiveOp = Q_NULLPTR;
         }
 
+        op->disconnect(this);
         op->setOpState(YubiKeyOp::OpQueued);
     }
 }
@@ -416,11 +419,7 @@ YubiKeyOpQueue::Private::queue(
     static int gLastId = 0;
 
     if (aFlags & Replace) {
-        if (iActiveOp && iActiveOp->iApdu.sameAs(aApdu)) {
-            HDEBUG("cancelling active" << iActiveOp->iApdu.name <<
-                "command" << iActiveOp->iId);
-            cancelActiveOp();
-        } else for (MutableIterator it(iQueue); it.hasNext();) {
+        for (MutableIterator it(iQueue); it.hasNext();) {
             Entry* op = it.next();
 
             if (op->iApdu.sameAs(aApdu)) {
@@ -450,15 +449,17 @@ YubiKeyOpQueue::Private::queue(
 void
 YubiKeyOpQueue::Private::clear()
 {
+    Queue queue;
+
     setIo(Q_NULLPTR);
+    queue.swap(iQueue);
     if (iActiveOp) {
-        delete iActiveOp->setOpState(YubiKeyOp::OpCancelled);
+        YubiKeyOp* activeOp = iActiveOp;
+
         iActiveOp = Q_NULLPTR;
+        delete activeOp;
     }
-    for (Iterator it(iQueue); it.hasNext();) {
-        delete it.next()->setOpState(YubiKeyOp::OpCancelled);
-    }
-    iQueue.clear();
+    qDeleteAll(queue);
     iAuth.clear();
     iAuthAlgorithm = YubiKeyAlgorithm_Unknown;
     setYubiKeySerial(0);
@@ -471,7 +472,11 @@ YubiKeyOpQueue::Private::clear()
 void
 YubiKeyOpQueue::Private::releaseIo()
 {
-    resetTx();
+    if (iActiveOp) {
+        iActiveOp->resetTx();
+        requeueActiveOp();
+    }
+    resetInternalTx();
     iIoSetupDone = false;
     iRevalidate = false;
     iAuthChallenge.clear();
@@ -497,34 +502,26 @@ YubiKeyOpQueue::Private::setState(
     }
 }
 
-YubiKeyOpQueue::State
+void
 YubiKeyOpQueue::Private::startNextOp()
 {
     if (iIo && iIo->canTransmit() && !iActiveOp && !iQueue.isEmpty()) {
         if (iRevalidate) {
             iRevalidate = false;
             select();
-            return QueuePrepare;
+            setState(QueuePrepare);
+            return;
         } else {
             iActiveOp = iQueue.takeFirst();
-            if (setTx(iIo->ioTransmit(iActiveOp->iApdu))) {
-                iActiveOp->setOpState(YubiKeyOp::OpActive);
-                iRespBuf.resize(0);
-                connect(iTx.data(),
-                    SIGNAL(txCancelled()),
-                    SLOT(onTxFailed()));
-                connect(iTx.data(),
-                    SIGNAL(txFailed()),
-                    SLOT(onTxFailed()));
-                connect(iTx.data(),
-                    SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
-                    SLOT(onTxFinished(YubiKeyIoTx::Result,QByteArray)));
+            if (iActiveOp->start()) {
+                connect(iActiveOp, SIGNAL(opStateChanged()),
+                    SLOT(onActiveOpStateChanged()));
             } else {
                 requeueActiveOp();
             }
         }
     }
-    return iActiveOp ? QueueActive : QueueIdle;
+    setState(iActiveOp ? QueueActive : QueueIdle);
 }
 
 void
@@ -540,7 +537,7 @@ YubiKeyOpQueue::Private::tryToStartNextOp()
         }
         break;
     case QueueActive:
-        setState(startNextOp());
+        startNextOp();
         break;
     }
 }
@@ -581,21 +578,21 @@ YubiKeyOpQueue::Private::setIo(
 }
 
 bool
-YubiKeyOpQueue::Private::setTx(
+YubiKeyOpQueue::Private::setInternalTx(
     YubiKeyIoTx* aTx)
 {
-    if (iTx) {
-        iTx->disconnect(this);
-        iTx->txCancel();
+    if (iInternalTx) {
+        iInternalTx->disconnect(this);
+        iInternalTx->txCancel();
     }
-    iTx.reset(aTx);
+    iInternalTx.reset(aTx);
     return aTx != Q_NULLPTR;
 }
 
 void
-YubiKeyOpQueue::Private::resetTx()
+YubiKeyOpQueue::Private::resetInternalTx()
 {
-    setTx(Q_NULLPTR);
+    setInternalTx(Q_NULLPTR);
 }
 
 void
@@ -674,13 +671,14 @@ YubiKeyOpQueue::Private::select()
     static const YubiKeyIo::APDU CMD_SELECT("SELECT",
         0x00, 0xa4, 0x04, 0x00, AID, sizeof(AID));
 
-    resetTx();
+    resetInternalTx();
     requeueActiveOp();
-    if (setTx(iIo->ioTransmit(CMD_SELECT))) {
-        // SELECT requires special handling upon completion
-        connect(iTx.data(), SIGNAL(txFailed()), SLOT(onSelectFailed()));
-        connect(iTx.data(), SIGNAL(txCancelled()), SLOT(onSelectFailed()));
-        connect(iTx.data(), SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
+    if (setInternalTx(iIo->ioTransmit(CMD_SELECT))) {
+        YubiKeyIoTx* tx = iInternalTx.data();
+
+        connect(tx, SIGNAL(txFailed()), SLOT(onSelectFailed()));
+        connect(tx, SIGNAL(txCancelled()), SLOT(onSelectFailed()));
+        connect(tx, SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
             SLOT(onSelectFinished(YubiKeyIoTx::Result,QByteArray)));
     } else {
         setState(QueueIdle);
@@ -762,12 +760,14 @@ void
 YubiKeyOpQueue::Private::validate(
     const QByteArray& aAccessKey)
 {
-    resetTx();
+    resetInternalTx();
     requeueActiveOp();
-    if (setTx(iIo->ioTransmit(makeValidateApdu(aAccessKey)))) {
-        connect(iTx.data(), SIGNAL(txFailed()), SLOT(onValidateFailed()));
-        connect(iTx.data(), SIGNAL(txCancelled()), SLOT(onValidateFailed()));
-        connect(iTx.data(), SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
+    if (setInternalTx(iIo->ioTransmit(makeValidateApdu(aAccessKey)))) {
+        YubiKeyIoTx* tx = iInternalTx.data();
+
+        connect(tx, SIGNAL(txFailed()), SLOT(onValidateFailed()));
+        connect(tx, SIGNAL(txCancelled()), SLOT(onValidateFailed()));
+        connect(tx, SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
             SLOT(onValidateFinished(YubiKeyIoTx::Result,QByteArray)));
     } else {
         setState(QueueIdle);
@@ -775,62 +775,39 @@ YubiKeyOpQueue::Private::validate(
 }
 
 void
-YubiKeyOpQueue::Private::sendRemaining(
-    uint aAmount)
+YubiKeyOpQueue::Private::onActiveOpStateChanged()
 {
-    static const YubiKeyIo::APDU SEND_REMAINING("SEND_REMAINING", 0x00, 0xa5);
+    Entry* op = qobject_cast<Entry*>(sender());
 
-    HDEBUG(iRespBuf.size() << "bytes +" << aAmount << "more");
-    if (setTx(iIo->ioTransmit(SEND_REMAINING))) {
-        connect(iTx.data(), SIGNAL(txCancelled()), SLOT(onTxFailed()));
-        connect(iTx.data(), SIGNAL(txFailed()), SLOT(onTxFailed()));
-        connect(iTx.data(),SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
-            SLOT(onRemainingFinished(YubiKeyIoTx::Result,QByteArray)));
-    } else {
-        setState(QueueIdle);
-        requeueActiveOp();
+    HASSERT(op == iActiveOp);
+    switch (op->opState()) {
+    case YubiKeyOp::OpQueued:
+    case YubiKeyOp::OpActive:
+        // Keep it around
+        return;
+    case YubiKeyOp::OpCancelled:
+    case YubiKeyOp::OpFinished:
+        break;
+    case YubiKeyOp::OpFailed:
+        if (op->iFlags & Retry) {
+            // Keep it around
+            HDEBUG(op->name() << "failed, will retry");
+            requeueActiveOp();
+            tryToStartNextOp();
+            return;
+        } else {
+            HDEBUG(op->name() << "failed");
+            break;
+        }
     }
-}
 
-void
-YubiKeyOpQueue::Private::activeOpFinished(
-    uint aResult,
-    const QByteArray& aData)
-{
-    Entry* op = iActiveOp;
-
-#if HARBOUR_DEBUG
-    if (aResult == RC_OK) {
-        HDEBUG(op->name() << "ok" << aData.toHex().constData());
-    } else {
-        HDEBUG(op->name() << "error" << YubiKeyIoTx::Result(aResult));
-    }
-#endif // HARBOUR_DEBUG
-
-    queueSignal(SignalOpIdsChanged);
+    op->disconnect(this);
     iActiveOp = Q_NULLPTR;
 
-    Q_EMIT op->opFinished(aResult, aData);
-    op->setOpState(YubiKeyOp::OpFinished);
-    HarbourUtil::scheduleDeleteLater(op);
+    queueSignal(SignalOpIdsChanged);
     tryToStartNextOp();
-}
-
-void
-YubiKeyOpQueue::Private::activeOpFailed()
-{
-    Entry* op = iActiveOp;
-
-    if (op->iFlags & Retry) {
-        HDEBUG(op->name() << "failed, will retry");
-        requeueActiveOp();
-        tryToStartNextOp();
-    } else {
-        iActiveOp = Q_NULLPTR;
-        HDEBUG(op->name() << "failed");
-        op->setOpState(YubiKeyOp::OpFailed);
-        HarbourUtil::scheduleDeleteLater(op);
-    }
+    emitQueuedSignals();
+    HarbourUtil::scheduleDeleteLater(op);
 }
 
 void
@@ -855,7 +832,7 @@ void
 YubiKeyOpQueue::Private::onSelectFailed()
 {
     HDEBUG("SELECT failed");
-    resetTx();
+    resetInternalTx();
     setState(QueueIdle);
     emitQueuedSignals();
 }
@@ -864,7 +841,7 @@ void
 YubiKeyOpQueue::Private::onValidateFailed()
 {
     HDEBUG("VALIDATE failed");
-    resetTx();
+    resetInternalTx();
     setState(QueueIdle);
     emitQueuedSignals();
 }
@@ -874,8 +851,7 @@ YubiKeyOpQueue::Private::onSelectFinished(
     YubiKeyIoTx::Result aResult,
     const QByteArray& aData)
 {
-    resetTx();
-
+    resetInternalTx();
     if (aResult.success()) {
         HDEBUG("SELECT ok");
         YubiKeyUtil::SelectResponse response;
@@ -897,7 +873,7 @@ YubiKeyOpQueue::Private::onSelectFinished(
                     iAuth.forgetPassword();
                     setAuthAccess(YubiKeyAuthAccessOpen);
                     authorized();
-                    setState(startNextOp());
+                    startNextOp();
                 } else {
                     // See if we have the access key for it
                     QByteArray accessKey(iAuth.getAccessKey(iAuthAlgorithm));
@@ -957,7 +933,7 @@ YubiKeyOpQueue::Private::onValidateFinished(
     YubiKeyIoTx::Result aResult,
     const QByteArray& aData)
 {
-    resetTx();
+    resetInternalTx();
 
     // Response Codes
     //
@@ -997,7 +973,7 @@ YubiKeyOpQueue::Private::onValidateFinished(
                 iAuth.touch();
                 setAuthAccess(YubiKeyAuthAccessGranted);
                 authorized();
-                setState(startNextOp());
+                startNextOp();
             } else {
                 queueSetupSignal(SignalYubiKeyValidationFailed);
                 setAuthAccess(YubiKeyAuthAccessDenied);
@@ -1016,51 +992,30 @@ YubiKeyOpQueue::Private::onValidateFinished(
 }
 
 void
-YubiKeyOpQueue::Private::onTxFailed()
+YubiKeyOpQueue::Private::emitQueuedSignals()
 {
-    resetTx();
-    activeOpFailed();
-    emitQueuedSignals();
-}
-
-void
-YubiKeyOpQueue::Private::onTxFinished(
-    YubiKeyIoTx::Result aResult,
-    const QByteArray& aData)
-{
-    uint amount;
-
-    resetTx();
-    if (aResult.moreData(&amount)) {
-        HDEBUG(iActiveOp->name() << "(partial)" << aData.size() << "bytes");
-        iRespBuf.append(aData);
-        sendRemaining(amount);
-    } else {
-        activeOpFinished(aResult.code, aData);
+    if (iActiveOp) {
+        iActiveOp->emitQueuedSignals();
     }
-    emitQueuedSignals();
-}
 
-void
-YubiKeyOpQueue::Private::onRemainingFinished(
-    YubiKeyIoTx::Result aResult,
-    const QByteArray& aData)
-{
-    uint amount;
+    if (!iQueue.isEmpty()) {
+        Queue changedOps;
 
-    iRespBuf.append(aData);
-    resetTx();
+        // Protect against iQueue modifications by the signal handlers
+        for (Iterator it(iQueue); it.hasNext();) {
+            Entry* op = it.next();
 
-    if (aResult.moreData(&amount)) {
-        sendRemaining(amount);
-    } else {
-        const QByteArray data(iRespBuf);
-
-        iRespBuf.clear();
-        HDEBUG("SEND_REMAINING done" << data.size() << "bytes");
-        activeOpFinished(aResult.code, data);
+            if (op->hasQueuedSignals()) {
+                changedOps.append(op);
+            }
+        }
+        if (!changedOps.isEmpty()) {
+            for (Iterator it(changedOps); it.hasNext();) {
+                it.next()->emitQueuedSignals();
+            }
+        }
     }
-    emitQueuedSignals();
+    YubiKeyOpQueuePrivateBase::emitQueuedSignals();
 }
 
 // ==========================================================================
@@ -1079,12 +1034,17 @@ YubiKeyOpQueue::Entry::Entry(
     iFlags(aFlags),
     iPriority(aPriority),
     iId(aId),
+    iTxFinished(false),
     iOpData(aOpData),
+    iPrevOpState(OpQueued),
     iOpState(OpQueued)
 {}
 
 YubiKeyOpQueue::Entry::~Entry()
 {
+    resetTx();
+    setOpState(OpCancelled);
+    emitQueuedSignals();
     delete iOpData;
 }
 
@@ -1095,16 +1055,39 @@ YubiKeyOpQueue::Entry::owner() const
     return qobject_cast<Private*>(parent());
 }
 
-YubiKeyOpQueue::Entry*
+void
 YubiKeyOpQueue::Entry::setOpState(
     OpState aState)
 {
     if (!isDone() && iOpState != aState) {
         HDEBUG(iId << iOpState << "=>" << aState);
         iOpState = aState;
+    }
+}
+
+bool
+YubiKeyOpQueue::Entry::hasQueuedSignals() const
+{
+    return iTxFinished || iPrevOpState != iOpState;
+}
+
+void
+YubiKeyOpQueue::Entry::emitQueuedSignals()
+{
+    if (iTxFinished) {
+        const uint code = iTxResult.code;
+        QByteArray data;
+
+        // Clear the state before emitting the signal
+        iTxFinished = false;
+        iTxResult.code = 0;
+        iTxRespBuf.swap(data);
+        Q_EMIT opFinished(code, data);
+    }
+    if (iPrevOpState != iOpState) {
+        iPrevOpState = iOpState;
         Q_EMIT opStateChanged();
     }
-    return this;
 }
 
 const char*
@@ -1136,24 +1119,145 @@ YubiKeyOpQueue::Entry::opCancel()
 {
     Private* p = owner();
 
-    switch (iOpState) {
-    case OpQueued:
-        HVERIFY(p->iQueue.removeOne(this));
-        p->queueSignal(SignalOpIdsChanged);
-        setOpState(OpCancelled);
-        break;
-    case OpActive:
+    if (iTx) {
+        // Cancel the transaction and wait until it actually gets cancelled
+        // The op remains active for the time being.
         HASSERT(p->iActiveOp == this);
-        p->cancelActiveOp();
-        break;
-    case OpCancelled:
-    case OpFinished:
-    case OpFailed:
-        break;
+        HASSERT(iOpState == OpActive);
+        iTx->txCancel();
+    } else {
+        HASSERT(iOpState != OpActive);
+        switch (iOpState) {
+        case OpQueued:
+            HVERIFY(p->iQueue.removeOne(this));
+            p->queueSignal(SignalOpIdsChanged);
+            setOpState(OpCancelled);
+            break;
+        case OpActive:
+        case OpCancelled:
+        case OpFinished:
+        case OpFailed:
+            break;
+        }
+        // We are done with this op
+        HarbourUtil::scheduleDeleteLater(this);
     }
 
+    emitQueuedSignals();
     p->emitQueuedSignals();
-    HarbourUtil::scheduleDeleteLater(this);
+}
+
+bool
+YubiKeyOpQueue::Entry::start()
+{
+    Private* p = owner();
+
+    HASSERT(!iTxFinished);
+    iTxRespBuf.resize(0);
+    if (iTx) {
+        iTx->disconnect(this);
+        iTx->txCancel();
+    }
+    if (p->iIo && setTx(p->iIo->ioTransmit(iApdu))) {
+        connect(iTx.data(),
+            SIGNAL(txCancelled()),
+            SLOT(onTxFailed()));
+        connect(iTx.data(),
+            SIGNAL(txFailed()),
+            SLOT(onTxFailed()));
+        connect(iTx.data(),
+            SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
+            SLOT(onTxFinished(YubiKeyIoTx::Result,QByteArray)));
+        setOpState(OpActive);
+        return true;
+    }
+    return false;
+}
+
+bool
+YubiKeyOpQueue::Entry::setTx(
+    YubiKeyIoTx* aTx)
+{
+    if (iTx) {
+        iTx->disconnect(this);
+        iTx->txCancel();
+    }
+    iTx.reset(aTx);
+    if (aTx) {
+        connect(aTx, SIGNAL(txCancelled()), SLOT(onTxFailed()));
+        connect(aTx, SIGNAL(txFailed()), SLOT(onTxFailed()));
+        connect(aTx, SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
+            SLOT(onTxFinished(YubiKeyIoTx::Result,QByteArray)));
+    }
+    return aTx != Q_NULLPTR;
+}
+
+void
+YubiKeyOpQueue::Entry::resetTx()
+{
+    setTx(Q_NULLPTR);
+}
+
+void
+YubiKeyOpQueue::Entry::sendRemaining(
+    uint aAmount)
+{
+    static const YubiKeyIo::APDU SEND_REMAINING("SEND_REMAINING", 0x00, 0xa5);
+
+    Private* p = owner();
+    YubiKeyIo* io = p->iIo;
+
+    HDEBUG(iTxRespBuf.size() << "bytes +" << aAmount << "more");
+    if (!io || !setTx(io->ioTransmit(SEND_REMAINING))) {
+        setOpState(OpFailed);
+    }
+}
+
+
+void
+YubiKeyOpQueue::Entry::onTxCancelled()
+{
+    resetTx();
+    setOpState(OpCancelled);
+    emitQueuedSignals();
+}
+
+void
+YubiKeyOpQueue::Entry::onTxFailed()
+{
+    resetTx();
+    setOpState(OpFailed);
+    emitQueuedSignals();
+}
+
+void
+YubiKeyOpQueue::Entry::onTxFinished(
+    YubiKeyIoTx::Result aResult,
+    const QByteArray& aData)
+{
+    uint amount;
+
+    iTx->disconnect(this);
+    iTx->txCancel();
+    iTx.reset();
+
+    iTxRespBuf.append(aData);
+    if (aResult.moreData(&amount)) {
+        HDEBUG(name() << "(partial)" << aData.size() << "bytes");
+        sendRemaining(amount);
+    } else {
+#if HARBOUR_DEBUG
+        if (aResult.success()) {
+            HDEBUG(name() << "ok" << iTxRespBuf.toHex().constData());
+        } else {
+            HDEBUG(name() << "error" << aResult);
+        }
+#endif // HARBOUR_DEBUG
+        iTxFinished = true;
+        iTxResult = aResult;
+        setOpState(OpFinished);
+    }
+    emitQueuedSignals();
 }
 
 // ==========================================================================

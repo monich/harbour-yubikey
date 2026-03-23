@@ -128,6 +128,7 @@ public:
     YubiKeyOp* queue(const YubiKeyIo::APDU&, Flags, YubiKeyOp::OpData*);
     YubiKeyOp* queue(const YubiKeyIo::APDU&, Flags, Priority, YubiKeyOp::OpData*);
 
+    int drop(const YubiKeyIo::APDU&, bool aFullMatch = false);
     State opQueueState() const;
     QList<int> opIds() const;
     uint yubiKeySerial() const;

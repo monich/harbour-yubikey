@@ -87,6 +87,7 @@ class YubiKey::Private :
     Q_OBJECT
     static const SignalEmitter gSignalEmitters[];
     static const YubiKeyIo::APDU LIST_APDU;
+    static const YubiKeyIo::APDU CALCULATE_ALL_APDU;
 
     // (relatively) easy way to get command specific OpData from a YubiKeyOp
     // completion slot
@@ -177,6 +178,7 @@ YubiKey::Private::gSignalEmitters [] = {
 
 /* static */
 const YubiKeyIo::APDU YubiKey::Private::LIST_APDU("LIST", 0x00, 0xa1);
+const YubiKeyIo::APDU YubiKey::Private::CALCULATE_ALL_APDU("CALCULATE_ALL", 0x00, 0xa4);
 
 YubiKey::Private::Private(
     YubiKey* aYubiKey) :
@@ -569,7 +571,9 @@ YubiKey::Private::listAndCalculateAll()
 {
     YubiKeyOp* listOp = iOpQueue.queue(LIST_APDU, YubiKeyOpQueue::Replace |
         YubiKeyOpQueue::Retry);
+
     if (listOp) {
+        iOpQueue.drop(CALCULATE_ALL_APDU);
         passwordUpdateStarted();
         connect(listOp,
             SIGNAL(destroyed(QObject*)),
@@ -585,7 +589,6 @@ YubiKey::Private::calculateAll(
     OtpList aOtpList)
 {
     const quint64 challenge = qToBigEndian(iLastRequestedPeriod = currentPeriod());
-    static const YubiKeyIo::APDU CALCULATE_ALL("CALCULATE_ALL", 0x00, 0xa4);
 
     // Calculate All Data
     //
@@ -594,7 +597,7 @@ YubiKey::Private::calculateAll(
     // | Challenge length  | Length of challenge                        |
     // | Challenge data    | Challenge                                  |
     // +-------------------+--------------------------------------------+
-    YubiKeyIo::APDU apdu(CALCULATE_ALL);
+    YubiKeyIo::APDU apdu(CALCULATE_ALL_APDU);
 
     apdu.data.reserve(CHALLENGE_LEN + 2);
     apdu.appendTLV(TLV_TAG_CHALLENGE, sizeof(challenge), &challenge);

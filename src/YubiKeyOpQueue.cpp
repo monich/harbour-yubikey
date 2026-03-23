@@ -182,6 +182,7 @@ class YubiKeyOpQueue::Private :
 
     friend class Entry;
     static const SignalEmitter gSignalEmitters[];
+    typedef bool (YubiKeyIo::APDU::*MatchFn)(const YubiKeyIo::APDU&) const;
 
 public:
     typedef QQueue<Entry*> Queue;
@@ -209,6 +210,7 @@ public:
     YubiKeyOp* lookup(int);
     YubiKeyOp* queue(Entry*);
     YubiKeyOp* queue(const YubiKeyIo::APDU&, Flags, Priority, YubiKeyOp::OpData*);
+    int drop(const YubiKeyIo::APDU&, MatchFn);
 
     QList<int> opIds();
     void setIo(YubiKeyIo*);
@@ -444,6 +446,29 @@ YubiKeyOpQueue::Private::queue(
 
     queueSignal(SignalOpIdsChanged);
     return queue(new Entry(this, aApdu, aFlags, aPriority, id, aOpData));
+}
+
+int
+YubiKeyOpQueue::Private::drop(
+    const YubiKeyIo::APDU& aApdu,
+    MatchFn aMatch)
+{
+    int count = 0;
+
+    for (MutableIterator it(iQueue); it.hasNext();) {
+        Entry* op = it.next();
+
+        if (((op->iApdu).*(aMatch))(aApdu)) {
+            HDEBUG("dropping queued" << op->iApdu.name <<
+                   "command" << op->iId);
+            it.remove();
+            op->setOpState(YubiKeyOp::OpCancelled);
+            queueSignal(SignalOpIdsChanged);
+            HarbourUtil::scheduleDeleteLater(op);
+            count++;
+        }
+    }
+    return count;
 }
 
 void
@@ -1359,6 +1384,19 @@ YubiKeyOpQueue::queue(
     iPrivate->tryToStartNextOp();
     iPrivate->emitQueuedSignals();
     return op;
+}
+
+int
+YubiKeyOpQueue::drop(
+    const YubiKeyIo::APDU& aApdu,
+    bool aFullMatch)
+{
+    const int count = iPrivate->drop(aApdu, aFullMatch ?
+        &YubiKeyIo::APDU::equals :
+        &YubiKeyIo::APDU::sameAs);
+
+    iPrivate->emitQueuedSignals();
+    return count;
 }
 
 YubiKeyOpQueue::State

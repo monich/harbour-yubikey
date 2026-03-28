@@ -994,8 +994,7 @@ YubiKey::reset()
 
 YubiKeyOp*
 YubiKey::deleteToken(
-    QByteArray aName,
-    YubiKeyOp::OpData* aData)
+    QByteArray aName)
 {
     // Delete Data
     //
@@ -1008,7 +1007,7 @@ YubiKey::deleteToken(
     apdu.appendTLV(Private::TLV_TAG_NAME, aName);
 
     YubiKeyOp* op = iPrivate->iOpQueue.queue(apdu, YubiKeyOpQueue::KeySpecific,
-        YubiKeyOpQueue::HighPriority, aData);
+        YubiKeyOpQueue::HighPriority);
 
     // Need to re-read the tokens after deletion
     iPrivate->listAndCalculateAll();
@@ -1050,8 +1049,7 @@ YubiKey::refreshToken(
 YubiKeyOp*
 YubiKey::renameToken(
     QByteArray aFrom,
-    QByteArray aTo,
-    YubiKeyOp::OpData* aData)
+    QByteArray aTo)
 {
     // Rename credential
     //
@@ -1069,7 +1067,7 @@ YubiKey::renameToken(
     apdu.appendTLV(Private::TLV_TAG_NAME, aTo);
 
     YubiKeyOp* op = iPrivate->iOpQueue.queue(apdu, YubiKeyOpQueue::KeySpecific,
-        YubiKeyOpQueue::HighPriority, aData);
+        YubiKeyOpQueue::HighPriority);
 
     // Re-read the tokens after renaming
     iPrivate->listAndCalculateAll();

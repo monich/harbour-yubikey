@@ -131,8 +131,8 @@ public:
     Q_INVOKABLE QList<int> putTokens(QList<YubiKeyToken>);
 
     YubiKeyOp* refreshToken(QByteArray);
-    YubiKeyOp* deleteToken(QByteArray, YubiKeyOp::OpData* aData = Q_NULLPTR);
-    YubiKeyOp* renameToken(QByteArray, QByteArray, YubiKeyOp::OpData* aData = Q_NULLPTR);
+    YubiKeyOp* deleteToken(QByteArray);
+    YubiKeyOp* renameToken(QByteArray, QByteArray);
     void listAndCalculateAll();
 
 Q_SIGNALS:

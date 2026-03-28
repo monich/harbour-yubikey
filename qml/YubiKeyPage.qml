@@ -507,6 +507,7 @@ Page {
                         readonly property string itemPassword: model.password
                         readonly property bool itemFavorite: model.favorite
                         readonly property bool itemCanBeSteamToken: model.type === YubiKey.TypeTOTP
+                        readonly property bool itemMarkedForRename: model.entryOp === YubiKeyOtpListModel.EntryOpRename
                         readonly property bool itemMarkedForRefresh: model.entryOp === YubiKeyOtpListModel.EntryOpRefresh
                         readonly property bool itemMarkedForDeletion: model.entryOp === YubiKeyOtpListModel.EntryOpDelete
                         readonly property bool itemCanCopyPassword: !itemMarkedForRefresh && !itemMarkedForDeletion && itemPassword !== ""
@@ -538,77 +539,103 @@ Page {
                                 }
 
                                 MenuItem {
+                                    id: cancelRefreshMenuItem
+
+                                    //: Context menu item
+                                    //% "Cancel refresh"
+                                    text: qsTrId("yubikey-menu-cancel_refresh")
+                                    enabled: delegate.itemMarkedForRefresh
+                                    onEnabledChanged: contextMenu.updateItems()
+                                    onClicked: delegate.cancelPendingOp()
+                                }
+                                MenuItem {
                                     id: renameMenuItem
 
-                                    //: Generic menu item
-                                    //% "Rename"
-                                    text: qsTrId("yubikey-menu-rename")
-                                    onEnabledChanged: contextMenu.updateVisibility()
-                                    enabled: delegate.itemCanRename
-                                    onClicked: delegate.renameToken(itemName)
+                                    readonly property string actualText: delegate.itemMarkedForRename ?
+                                        //: Context menu item
+                                        //% "Cancel rename"
+                                        qsTrId("yubikey-menu-cancel_rename") :
+                                        //: Generic menu item
+                                        //% "Rename"
+                                        qsTrId("yubikey-menu-rename")
+
+                                    enabled: delegate.itemCanRename && !delegate.itemMarkedForRefresh
+                                    onEnabledChanged: contextMenu.updateItems()
+                                    onClicked: {
+                                        if (delegate.itemMarkedForRename) {
+                                            delegate.cancelPendingOp()
+                                        } else {
+                                            delegate.renameToken(itemName)
+                                        }
+                                    }
                                 }
                                 MenuItem {
                                     id: deleteMenuItem
 
-                                    //: Generic menu item
-                                    //% "Delete"
-                                    text: qsTrId("yubikey-menu-delete")
-                                    onEnabledChanged: contextMenu.updateVisibility()
-                                    enabled: !delegate.itemMarkedForDeletion
-                                    onClicked: delegate.deleteToken()
-                                }
-                                MenuItem {
-                                    id: cancelMenuItem
-
-                                    //: Context menu item
-                                    //% "Cancel refresh"
-                                    text: delegate.itemMarkedForRefresh ? qsTrId("yubikey-menu-cancel_refresh") :
+                                    readonly property string actualText: delegate.itemMarkedForDeletion ?
                                         //: Context menu item
                                         //% "Cancel deletion"
-                                        delegate.itemMarkedForDeletion ? qsTrId("yubikey-menu-cancel_delete") : ""
+                                        qsTrId("yubikey-menu-cancel_delete") :
+                                        //: Generic menu item
+                                        //% "Delete"
+                                        qsTrId("yubikey-menu-delete")
 
-                                    onEnabledChanged: contextMenu.updateVisibility()
-                                    enabled: delegate.itemMarkedForRefresh || delegate.itemMarkedForDeletion
-                                    onClicked: otpListModel.cancelPendingOp(itemName)
+                                    enabled: !delegate.itemMarkedForRefresh
+                                    onEnabledChanged: contextMenu.updateItems()
+                                    onClicked: {
+                                        if (delegate.itemMarkedForDeletion) {
+                                            delegate.cancelPendingOp()
+                                        } else {
+                                            delegate.deleteToken()
+                                        }
+                                    }
                                 }
                                 MenuItem {
                                     id: favoriteMenuItem
 
-                                    text: delegate.itemFavorite ?
+                                    readonly property string actualText: delegate.itemFavorite ?
                                         //: Context menu item
                                         //% "Remove from cover"
                                         qsTrId("yubikey-menu-remove_from_cover") :
                                         //: Context menu item
                                         //% "Show on cover"
                                         qsTrId("yubikey-menu-show_on_cover")
-                                    onEnabledChanged: contextMenu.updateVisibility()
+
                                     enabled: !delegate.itemMarkedForDeletion
+                                    onEnabledChanged: contextMenu.updateItems()
                                     onClicked: delegate.toggleFavorite()
                                 }
                                 MenuItem {
                                     id: steamMenuItem
 
-                                    text: model.steam ?
+                                    readonly property string actualText: model.steam ?
                                         //: Context menu item
                                         //% "Standard token"
                                         qsTrId("yubikey-menu-use_as_standard_token") :
                                         //: Context menu item
                                         //% "Steam token"
                                         qsTrId("yubikey-menu-use_as_steam_token")
-                                    onEnabledChanged: contextMenu.updateVisibility()
+
                                     enabled: delegate.itemCanBeSteamToken && !delegate.itemMarkedForDeletion
+                                    onEnabledChanged: contextMenu.updateItems()
                                     onClicked: model.steam = !model.steam
                                 }
 
-                                Component.onCompleted: updateVisibility()
-                                onMenuExpandedChanged: updateVisibility()
+                                Component.onCompleted: updateItems()
+                                onMenuExpandedChanged: updateItems()
 
-                                function updateVisibility() {
+                                function updateItems() {
                                     if (!menuExpanded) {
+                                        // It doesn't look nice if menu items get renamed while
+                                        // menu is expanded. Let alone if they appear or disappear.
+                                        cancelRefreshMenuItem.visible = cancelRefreshMenuItem.enabled
+                                        renameMenuItem.text = renameMenuItem.actualText
                                         renameMenuItem.visible = renameMenuItem.enabled
+                                        deleteMenuItem.text = deleteMenuItem.actualText
                                         deleteMenuItem.visible = deleteMenuItem.enabled
-                                        cancelMenuItem.visible = cancelMenuItem.enabled
+                                        favoriteMenuItem.text = favoriteMenuItem.actualText
                                         favoriteMenuItem.visible = favoriteMenuItem.enabled
+                                        steamMenuItem.text = steamMenuItem.actualText
                                         steamMenuItem.visible = steamMenuItem.enabled
                                     }
                                 }
@@ -624,6 +651,10 @@ Page {
                                 clipboardNotification.publish()
                                 buzz.play()
                             }
+                        }
+
+                        function cancelPendingOp() {
+                            otpListModel.cancelPendingOp(itemName)
                         }
 
                         function renameToken(from) {

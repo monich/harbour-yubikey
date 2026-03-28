@@ -68,6 +68,11 @@
         <extracomment>Context menu item</extracomment>
         <translation>Отменить обновление</translation>
     </message>
+    <message id="yubikey-menu-cancel_rename">
+        <source>Cancel rename</source>
+        <extracomment>Context menu item</extracomment>
+        <translation>Отменить переименование</translation>
+    </message>
     <message id="yubikey-menu-cancel_delete">
         <source>Cancel deletion</source>
         <extracomment>Context menu item</extracomment>

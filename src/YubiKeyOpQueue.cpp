@@ -135,6 +135,7 @@ public:
     OpState opState() const Q_DECL_OVERRIDE;
     int opId() const Q_DECL_OVERRIDE;
     void opCancel() Q_DECL_OVERRIDE;
+    bool opIsDone() const Q_DECL_OVERRIDE;
 
 private:
     bool setTx(YubiKeyIoTx*);
@@ -369,7 +370,7 @@ YubiKeyOpQueue::Private::requeueActiveOp()
                 it.previous();
                 it.insert(iActiveOp);
                 iActiveOp = Q_NULLPTR;
-                return;
+                break;
             }
         }
 
@@ -819,6 +820,8 @@ YubiKeyOpQueue::Private::onActiveOpStateChanged()
             HDEBUG(op->name() << "failed, will retry");
             requeueActiveOp();
             tryToStartNextOp();
+            emitQueuedSignals();
+            op->emitQueuedSignals();
             return;
         } else {
             HDEBUG(op->name() << "failed");
@@ -832,6 +835,7 @@ YubiKeyOpQueue::Private::onActiveOpStateChanged()
     queueSignal(SignalOpIdsChanged);
     tryToStartNextOp();
     emitQueuedSignals();
+    op->emitQueuedSignals();
     HarbourUtil::scheduleDeleteLater(op);
 }
 
@@ -1084,7 +1088,30 @@ void
 YubiKeyOpQueue::Entry::setOpState(
     OpState aState)
 {
-    if (!isDone() && iOpState != aState) {
+    if (iOpState != aState) {
+        switch (iOpState) {
+        case OpQueued:
+        case OpActive:
+            break;
+        case OpFailed:
+            // Allow switching back from the OpFailed state
+            // if the Retry flag is set
+            if (iFlags & Retry) {
+                switch (aState) {
+                case OpQueued:
+                case OpActive:
+                    break;
+                case OpFailed:
+                case OpCancelled:
+                case OpFinished:
+                    return;
+                }
+            }
+            break;
+        case OpCancelled:
+        case OpFinished:
+            return;
+        }
         HDEBUG(iId << iOpState << "=>" << aState);
         iOpState = aState;
     }
@@ -1173,6 +1200,24 @@ YubiKeyOpQueue::Entry::opCancel()
 }
 
 bool
+YubiKeyOpQueue::Entry::opIsDone() const
+{
+    switch (iOpState) {
+    case OpQueued:
+    case OpActive:
+        break;
+    case OpFailed:
+        // Allow switching back from the OpFailed state
+        // if the Retry flag is set
+        return (!iFlags & Retry);
+    case OpCancelled:
+    case OpFinished:
+        return true;
+    }
+    return false;
+}
+
+bool
 YubiKeyOpQueue::Entry::start()
 {
     Private* p = owner();
@@ -1186,7 +1231,7 @@ YubiKeyOpQueue::Entry::start()
     if (p->iIo && setTx(p->iIo->ioTransmit(iApdu))) {
         connect(iTx.data(),
             SIGNAL(txCancelled()),
-            SLOT(onTxFailed()));
+            SLOT(onTxCancelled()));
         connect(iTx.data(),
             SIGNAL(txFailed()),
             SLOT(onTxFailed()));
@@ -1209,7 +1254,7 @@ YubiKeyOpQueue::Entry::setTx(
     }
     iTx.reset(aTx);
     if (aTx) {
-        connect(aTx, SIGNAL(txCancelled()), SLOT(onTxFailed()));
+        connect(aTx, SIGNAL(txCancelled()), SLOT(onTxCancelled()));
         connect(aTx, SIGNAL(txFailed()), SLOT(onTxFailed()));
         connect(aTx, SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
             SLOT(onTxFinished(YubiKeyIoTx::Result,QByteArray)));

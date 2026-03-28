@@ -497,7 +497,7 @@ YubiKeyOtpListModel::Private::setOtpList(
             if (k >= 0) {
                 const Entry& oldEntry = oldList.at(k);
 
-                if (oldEntry.iOp && !oldEntry.iOp->isDone()) {
+                if (oldEntry.iOp && !oldEntry.iOp->opIsDone()) {
                     entry.iOp = oldEntry.iOp;
                     entry.iOpType = oldEntry.iOpType;
                     entry.iOpState = oldEntry.iOpState;
@@ -579,7 +579,7 @@ YubiKeyOtpListModel::Private::setOtpList(
         if (k >= 0) {
             const Entry& oldEntry = oldList.at(k);
 
-            if (oldEntry.iOp && !oldEntry.iOp->isDone()) {
+            if (oldEntry.iOp && !oldEntry.iOp->opIsDone()) {
                 entry.iOp = oldEntry.iOp;
                 opType = oldEntry.iOpType;
                 opState = oldEntry.iOpState;
@@ -823,7 +823,7 @@ YubiKeyOtpListModel::Private::onEntryOpStateChanged()
     YubiKeyOp* op = qobject_cast<YubiKeyOp*>(sender());
     const int row = findOp(op);
 
-    if (op->isDone()) {
+    if (op->opIsDone()) {
         op->disconnect(this);
     }
     if (row >= 0) {

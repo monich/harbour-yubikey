@@ -94,8 +94,7 @@ public:
     virtual OpState opState() const = 0;
     virtual int opId() const = 0;
     virtual void opCancel() = 0;
-
-    bool isDone() const;
+    virtual bool opIsDone() const = 0;
 
 Q_SIGNALS:
     void opFinished(uint, QByteArray);

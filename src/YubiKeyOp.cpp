@@ -48,18 +48,3 @@ YubiKeyOp::OpData::OpData()
 
 YubiKeyOp::OpData::~OpData()
 {}
-
-bool
-YubiKeyOp::isDone() const
-{
-    switch (opState()) {
-    case OpQueued:
-    case OpActive:
-        break;
-    case OpCancelled:
-    case OpFinished:
-    case OpFailed:
-        return true;
-    }
-    return false;
-}

@@ -1,6 +1,6 @@
 Name:           harbour-yubikey
 Summary:        YubiKey NFC OTP app
-Version:        1.1.0
+Version:        1.1.1
 Release:        1
 License:        BSD
 URL:            https://github.com/monich/harbour-yubikey
@@ -24,7 +24,7 @@ BuildRequires:  qt5-qttools-linguist
 
 %{!?qtc_qmake5:%define qtc_qmake5 %qmake5}
 %{!?qtc_make:%define qtc_make make}
-%{?qtc_builddir:%define _builddir %qtc_builddir}
+%define _binary_payload w6.xzdio
 
 %description
 Allows to use Yubikey NFC for storing OTP secrets

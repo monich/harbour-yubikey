@@ -185,44 +185,42 @@ OTHER_FILES += \
     $${LIBGNFCDC_SPEC}/org.sailfishos.nfc.Tag.xml
 
 defineTest(generateStub) {
-    xml = $${LIBGNFCDC_SPEC}/org.sailfishos.nfc.$${1}.xml
-    cmd = gdbus-codegen --generate-c-code org.sailfishos.nfc.$${1} $${xml}
+    target_base = org_sailfishos_nfc_$${1}
+    gen_base = org.sailfishos.nfc.$${1}
+    xml = $${LIBGNFCDC_SPEC}/$${gen_base}.xml
+    cmd = gdbus-codegen --generate-c-code $${gen_base} $${xml}
 
-    gen_h = $${OUT_PWD}/org.sailfishos.nfc.$${1}.h
-    gen_c = $${OUT_PWD}/org.sailfishos.nfc.$${1}.c
-    target_h = org_sailfishos_nfc_$${1}_h
-    target_c = org_sailfishos_nfc_$${1}_c
+    gen_h = $${gen_base}.h
+    gen_c = $${gen_base}.c
+    target_gen = $${target_base}_gen
+    target_dep = $${target_base}_dep
 
-    $${target_h}.target = $${gen_h}
-    $${target_h}.depends = $${xml}
-    $${target_h}.commands = $${cmd}
-    export($${target_h}.target)
-    export($${target_h}.depends)
-    export($${target_h}.commands)
+    $${target_gen}.target = $${gen_c}
+    $${target_gen}.depends = $${xml}
+    $${target_gen}.commands = $${cmd}
+    export($${target_gen}.target)
+    export($${target_gen}.depends)
+    export($${target_gen}.commands)
 
-    GENERATED_HEADERS += $${gen_h}
-    PRE_TARGETDEPS += $${gen_h}
-    QMAKE_EXTRA_TARGETS += $${target_h}
-
-    $${target_c}.target = $${gen_c}
-    $${target_c}.depends = $${target_h}
-    export($${target_c}.target)
-    export($${target_c}.depends)
+    $${target_dep}.target = $$relative_path($${LIBGNFCDC_SRC}/$${2}.c,$${OUT_PWD})
+    $${target_dep}.depends = $${gen_c}
+    export($${target_dep}.target)
+    export($${target_dep}.depends)
 
     GENERATED_SOURCES += $${gen_c}
-    QMAKE_EXTRA_TARGETS += $${target_c}
     PRE_TARGETDEPS += $${gen_c}
+    QMAKE_EXTRA_TARGETS += $${target_gen} $${target_dep}
 
-    export(QMAKE_EXTRA_TARGETS)
     export(GENERATED_SOURCES)
     export(PRE_TARGETDEPS)
+    export(QMAKE_EXTRA_TARGETS)
 }
 
-generateStub(Adapter)
-generateStub(Daemon)
-generateStub(IsoDep)
-generateStub(Settings)
-generateStub(Tag)
+generateStub(Adapter,nfcdc_adapter)
+generateStub(Daemon,nfcdc_daemon)
+generateStub(IsoDep,nfcdc_isodep)
+generateStub(Settings,nfcdc_daemon)
+generateStub(Tag,nfcdc_tag)
 
 # libqnfcdc
 

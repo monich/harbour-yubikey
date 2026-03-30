@@ -1209,7 +1209,7 @@ YubiKeyOpQueue::Entry::opIsDone() const
     case OpFailed:
         // Allow switching back from the OpFailed state
         // if the Retry flag is set
-        return (!iFlags & Retry);
+        return (!(iFlags & Retry));
     case OpCancelled:
     case OpFinished:
         return true;

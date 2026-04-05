@@ -359,6 +359,9 @@ public:
     IoLock lock();
     void deactivate();
 
+    template <typename T> static QByteArray byteArray(T*);
+    template <typename T> static T* alloc0();
+    static bool submitTransfer(libusb_transfer*);
     static void reqCompleted(libusb_transfer*);
     static void respCompleted(libusb_transfer*);
 
@@ -507,6 +510,43 @@ YubiKeyUsbIo::Private::deactivate()
 }
 
 /* static */
+template <typename T>
+QByteArray
+YubiKeyUsbIo::Private::byteArray(
+    T* t)
+{
+    return QByteArray((char*) t, sizeof(*t));
+}
+
+/* static */
+template <typename T> T*
+YubiKeyUsbIo::Private::alloc0()
+{
+    T* t = (T*) malloc(sizeof(T));
+
+    memset(t, 0, sizeof(T));
+    return t;
+}
+
+/* static */
+bool
+YubiKeyUsbIo::Private::submitTransfer(
+    libusb_transfer* aTransfer)
+{
+    int r = libusb_submit_transfer(aTransfer);
+
+    if (r == LIBUSB_SUCCESS) {
+        return true;
+    } else {
+        // Cleanup
+        HWARN("USB tx error" << r);
+        aTransfer->status = (libusb_transfer_status) r;
+        aTransfer->callback(aTransfer);
+        return false;
+    }
+}
+
+/* static */
 void
 YubiKeyUsbIo::Private::reqCompleted(
     libusb_transfer* aTransfer)
@@ -554,26 +594,14 @@ YubiKeyUsbIo::Private::respCompleted(
 // ==========================================================================
 // YubiKeyUsbIo::Lock
 // ==========================================================================
+
 YubiKeyUsbIo::Lock::Lock(
     Private* aPrivate) :
     iPrivate(aPrivate),
     iHandle(aPrivate->iHandle),
     iIntfNum(aPrivate->iInterface.iIntfNum)
 {
-    // The interface is already clamed, switch the ICC power on
-    const uint csize = sizeof(PC_to_RDR_IccPowerOn);
-    PC_to_RDR_IccPowerOn* msg = (PC_to_RDR_IccPowerOn*) malloc(csize);
-
-    // YubiKeyUsbIo::Private may be deallocated before completion
-    // of the USB transfer, hence QPointer<Private>
-    memset(msg, 0, csize);
-    msg->hdr.bMessageType = PC_to_RDR_Message_IccPowerOn;
-    msg->hdr.bSeq = iPrivate->iSeq++;
-    libusb_transfer* req = libusb_alloc_transfer(0);
-    libusb_fill_bulk_transfer(req, iHandle, aPrivate->iBulkOutEp,
-        (uchar*) msg, csize, iccPowerOnRequestSent,
-        new QPointer<Private>(aPrivate), Private::TIMEOUT_MS);
-
+    // The interface is already claimed, switch the ICC power on
     // The max response size is 33 bytes ATR + 10 bytes RDR_to_PC_DataBlock.
     // Let's make it 64 to give it some extra room.
     const uint rsize = 64;
@@ -582,9 +610,22 @@ YubiKeyUsbIo::Lock::Lock(
         (uchar*) malloc(rsize), rsize, iccPowerOnResponseReceived,
         new QPointer<Private>(aPrivate), Private::TIMEOUT_MS);
 
-    HDEBUG("IccPowerOn" << QByteArray((char*)msg, csize).toHex().constData());
-    libusb_submit_transfer(resp);
-    libusb_submit_transfer(req);
+    if (Private::submitTransfer(resp)) {
+        PC_to_RDR_IccPowerOn* msg = Private::alloc0<PC_to_RDR_IccPowerOn>();
+
+        // YubiKeyUsbIo::Private may be deallocated before completion
+        // of the USB transfer, hence QPointer<Private>
+        msg->hdr.bMessageType = PC_to_RDR_Message_IccPowerOn;
+        msg->hdr.bSeq = iPrivate->iSeq++;
+        libusb_transfer* req = libusb_alloc_transfer(0);
+        libusb_fill_bulk_transfer(req, iHandle, aPrivate->iBulkOutEp,
+            (uchar*) msg, sizeof(*msg), iccPowerOnRequestSent,
+            new QPointer<Private>(aPrivate), Private::TIMEOUT_MS);
+
+        if (Private::submitTransfer(req)) {
+            HDEBUG("IccPowerOn" << Private::byteArray(msg).toHex().constData());
+        }
+    }
 }
 
 YubiKeyUsbIo::Lock::~Lock()
@@ -621,30 +662,27 @@ void
 YubiKeyUsbIo::Lock::release()
 {
     if (iPrivate) {
-        // Power off the ICC before releasing the interface
-        const uint size = sizeof(PC_to_RDR_IccPowerOff);
-        PC_to_RDR_IccPowerOff* msg = (PC_to_RDR_IccPowerOff*) malloc(size);
-
-        memset(msg, 0, size);
-        msg->hdr.bMessageType = PC_to_RDR_Message_IccPowerOff;
-        msg->hdr.bSeq = iPrivate->iSeq++;
-        HDEBUG("IccPowerOff" << QByteArray((char*)msg, size).
-            toHex().constData());
-        libusb_transfer* req = libusb_alloc_transfer(0);
-        libusb_fill_bulk_transfer(req, iHandle, iPrivate->iBulkOutEp,
-            (uchar*) msg, size, Private::reqCompleted,
-            Q_NULLPTR, Private::TIMEOUT_MS);
-
+        // Power off the ICC before releasing the interface.
         // YubiKeyUsbIo::Private may be deallocated before completion
         // of the USB transfer, hence QPointer<Private>
-        const uint rsize = sizeof(RDR_to_PC_SlotStatus);
         libusb_transfer* resp = libusb_alloc_transfer(0);
         libusb_fill_bulk_transfer(resp, iHandle, iPrivate->iBulkInEp,
-            (uchar*) malloc(rsize), rsize, iccPowerOffResponseReceived,
+            (uchar*) Private::alloc0<RDR_to_PC_SlotStatus>(),
+            sizeof(RDR_to_PC_SlotStatus), iccPowerOffResponseReceived,
             new QPointer<Private>(iPrivate), Private::TIMEOUT_MS);
 
-        libusb_submit_transfer(resp);
-        libusb_submit_transfer(req);
+        if (Private::submitTransfer(resp)) {
+            libusb_transfer* req = libusb_alloc_transfer(0);
+            PC_to_RDR_IccPowerOff* msg = Private::alloc0<PC_to_RDR_IccPowerOff>();
+
+            msg->hdr.bMessageType = PC_to_RDR_Message_IccPowerOff;
+            msg->hdr.bSeq = iPrivate->iSeq++;
+            HDEBUG("IccPowerOff" << Private::byteArray(msg).toHex().constData());
+            libusb_fill_bulk_transfer(req, iHandle, iPrivate->iBulkOutEp,
+                (uchar*) msg, sizeof(*msg), Private::reqCompleted,
+                Q_NULLPTR, Private::TIMEOUT_MS);
+            Private::submitTransfer(req);
+        }
 
         iPrivate->iLock = Q_NULLPTR;
         iPrivate = Q_NULLPTR;
@@ -782,7 +820,6 @@ public:
 
     YubiKeyUsbIo* usbIo() const;
     void deactivate();
-    void cancel();
     void failed();
     void finished(Result, QByteArray);
 
@@ -796,45 +833,48 @@ public:
     bool iActive;
     bool iAutoDelete;
     const uchar iSeq;
-    libusb_transfer* iRequest;
-    libusb_transfer* iResponse;
 };
 
 YubiKeyUsbIo::Tx::Tx(
     YubiKeyUsbIo* aUsb,
     const APDU& aApdu) :
     YubiKeyIoTx(aUsb),
-    iState(TxPending),
-    iActive(true),
+    iState(TxFailed),
+    iActive(false),
     iAutoDelete(false),
-    iSeq(aUsb->iPrivate->iSeq++),
-    iRequest(libusb_alloc_transfer(0)),
-    iResponse(libusb_alloc_transfer(0))
+    iSeq(aUsb->iPrivate->iSeq++)
 {
     Private* priv = aUsb->iPrivate;
-    QByteArray apdu(encodeApdu(aApdu));
-    const uint xfrSize = sizeof(PC_to_RDR_XfrBlock) + apdu.size();
-    PC_to_RDR_XfrBlock* xfr = (PC_to_RDR_XfrBlock*) malloc(xfrSize);
+    libusb_transfer* resp = libusb_alloc_transfer(0);
 
-    HDEBUG(aApdu.name << apdu.toHex().constData());
-    HDEBUG("USB xfr" << iSeq);
-    memset(xfr, 0, sizeof(*xfr));
-    memcpy(xfr + 1, apdu.constData(), apdu.size());
-    xfr->hdr.bMessageType = PC_to_RDR_Message_XfrBlock;
-    xfr->hdr.dwLength = TO_USB_ENDIAN((uint32_t) apdu.size());
-    xfr->hdr.bSeq = iSeq;
     // Tx may be deallocated before completion of the USB transfer,
     // hence QPointer<Tx>
-    libusb_fill_bulk_transfer(iRequest, priv->iHandle, priv->iBulkOutEp,
-        (uchar*) xfr, xfrSize, dataSent, new QPointer<Tx>(this),
+    libusb_fill_bulk_transfer(resp, priv->iHandle, priv->iBulkInEp,
+        (uchar*) malloc(priv->iMaxCCIDMessageLength),
+        priv->iMaxCCIDMessageLength, dataReceived, new QPointer<Tx>(this),
         Private::TIMEOUT_MS);
+    if (Private::submitTransfer(resp)) {
+        libusb_transfer* req = libusb_alloc_transfer(0);
+        const QByteArray apdu(encodeApdu(aApdu));
+        const uint xfrSize = sizeof(PC_to_RDR_XfrBlock) + apdu.size();
+        PC_to_RDR_XfrBlock* xfr = (PC_to_RDR_XfrBlock*) malloc(xfrSize);
 
-    libusb_fill_bulk_transfer(iResponse, priv->iHandle, priv->iBulkInEp,
-        (uchar*) malloc(priv->iMaxCCIDMessageLength), priv->iMaxCCIDMessageLength,
-        dataReceived, new QPointer<Tx>(this), Private::TIMEOUT_MS);
-    libusb_submit_transfer(iResponse);
-    libusb_submit_transfer(iRequest);
-    priv->iActiveTx++;
+        memset(xfr, 0, sizeof(*xfr));
+        memcpy(xfr + 1, apdu.constData(), apdu.size());
+        xfr->hdr.bMessageType = PC_to_RDR_Message_XfrBlock;
+        xfr->hdr.dwLength = TO_USB_ENDIAN((uint32_t) apdu.size());
+        xfr->hdr.bSeq = iSeq;
+        libusb_fill_bulk_transfer(req, priv->iHandle, priv->iBulkOutEp,
+            (uchar*) xfr, xfrSize, dataSent, new QPointer<Tx>(this),
+            Private::TIMEOUT_MS);
+        if (Private::submitTransfer(req)) {
+            HDEBUG(aApdu.name << apdu.toHex().constData());
+            HDEBUG("USB xfr" << iSeq);
+            iState = TxPending;
+            iActive = true;
+            priv->iActiveTx++;
+        }
+    }
 }
 
 YubiKeyUsbIo::Tx::~Tx()
@@ -985,14 +1025,6 @@ YubiKeyUsbIo::Tx::deactivate()
     }
 }
 
-void
-YubiKeyUsbIo::Tx::cancel()
-{
-    // Abort functionality doesn't seem to be supported by Yubikeys :(
-    iRequest = Q_NULLPTR;
-    iResponse = Q_NULLPTR;
-}
-
 /* static */
 void
 YubiKeyUsbIo::Tx::dataSent(
@@ -1003,7 +1035,6 @@ YubiKeyUsbIo::Tx::dataSent(
 
     // Tx may be deallocated by now
     if (self) {
-        HASSERT(self->iRequest == aTransfer);
         if (aTransfer->status == LIBUSB_TRANSFER_COMPLETED) {
             HDEBUG("USB req" << self->iSeq << "sent");
         } else {
@@ -1011,7 +1042,6 @@ YubiKeyUsbIo::Tx::dataSent(
                 libusb_error_name(aTransfer->status));
             self->failed();
         }
-        self->iRequest = Q_NULLPTR;
     }
 
     delete ptr;
@@ -1035,7 +1065,6 @@ YubiKeyUsbIo::Tx::dataReceived(
             aTransfer->buffer;
 
         // Expecting RDR_to_PC_DataBlock with at least 2 bytes
-        HASSERT(self->iResponse == aTransfer);
         if (aTransfer->status == LIBUSB_TRANSFER_COMPLETED &&
             len >= sizeof(*msg)) {
             const uint datalen = FROM_USB_ENDIAN(msg->dwLength);
@@ -1044,7 +1073,7 @@ YubiKeyUsbIo::Tx::dataReceived(
                 // Resubmit the transfer
                 HWARN("Ignoring USB msg" << QByteArray((char*)msg, len).
                     toHex().constData());
-                libusb_submit_transfer(aTransfer);
+                Private::submitTransfer(aTransfer);
                 return;
             } else if (msg->bMessageType == RDR_to_PC_Message_DataBlock &&
                 len >= (datalen + sizeof(RDR_to_PC_DataBlock))) {
@@ -1053,7 +1082,7 @@ YubiKeyUsbIo::Tx::dataReceived(
                     // Time extension, resubmit the transfer
                     HDEBUG("Time extension" <<
                         QByteArray((char*)msg, len).toHex().constData());
-                    libusb_submit_transfer(aTransfer);
+                    Private::submitTransfer(aTransfer);
                     return;
                 } else if (datalen >= 2) {
                     const RDR_to_PC_DataBlock* db = (RDR_to_PC_DataBlock*) msg;
@@ -1081,7 +1110,6 @@ YubiKeyUsbIo::Tx::dataReceived(
             self->failed();
         }
 
-        self->iResponse = Q_NULLPTR;
         self->deactivate();
     }
 
@@ -1168,9 +1196,15 @@ YubiKeyUsbIo::ioTransmit(
 {
     YubiKeyIoTx* tx = new Tx(this, aApdu);
 
-    iPrivate->setState(IoActive);
-    iPrivate->emitQueuedSignals();
-    return tx;
+    if (tx->txState() == YubiKeyIoTx::TxFailed) {
+        // We have failed to actually submit USB transaction, drop this tx
+        delete tx;
+        return Q_NULLPTR;
+    } else {
+        iPrivate->setState(IoActive);
+        iPrivate->emitQueuedSignals();
+        return tx;
+    }
 }
 
 void

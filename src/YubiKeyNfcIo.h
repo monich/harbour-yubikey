@@ -54,6 +54,7 @@ public:
 
     // YubiKeyIo
     const char* ioPath() const Q_DECL_OVERRIDE;
+    Transport ioTransport() const Q_DECL_OVERRIDE;
     IoState ioState() const Q_DECL_OVERRIDE;
     uint ioSerial() const Q_DECL_OVERRIDE;
     IoLock ioLock() Q_DECL_OVERRIDE;

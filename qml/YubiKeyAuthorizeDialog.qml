@@ -53,7 +53,7 @@ Dialog {
                 //% "Validating the password"
                 qsTrId("yubikey-status-validating_password")  :
                 //: Status label
-                //% "Touch the same YubiKey to validate the password"
+                //% "Tap the same YubiKey to validate the password"
                 qsTrId("yubikey-status-waiting_to_authorize")
 
             Connections {

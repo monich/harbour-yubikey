@@ -7,24 +7,14 @@ import "harbour"
 Item {
     id: thisItem
 
-    visible: NfcSystem.valid
+    property bool landscape
+
     anchors.fill: parent
 
     signal flip()
 
-    readonly property bool _targetPresent: NfcAdapter.targetPresent
-
     function showSettingsButton() {
         showButtonTimer.restart()
-    }
-
-    BusyIndicator {
-        id: busyIndicator
-
-        anchors.centerIn: parent
-        size: BusyIndicatorSize.Large
-        running: _targetPresent
-        visible: opacity > 0
     }
 
     YubiKeyImage {
@@ -44,23 +34,16 @@ Item {
             rightMargin: Theme.horizontalPageMargin
         }
         verticalAlignment: Text.AlignVCenter
-        opacity: (_initialized && !busyIndicator.running) ? 1 : 0
-        width: isPortrait ? (parent.width - 2 * Theme.horizontalPageMargin) :
-            (parent.width - image.width - Theme.horizontalPageMargin)
-        height: isPortrait ? (parent.height - image.height*2/3) : parent.height
-        visible: opacity > 0
-        text: _targetPresent ? "" :
+        width: landscape ? (parent.width - image.width - Theme.horizontalPageMargin) :
+            (parent.width - 2 * Theme.horizontalPageMargin)
+        height: landscape ? parent.height : (parent.height - image.height*2/3)
+        text: NfcSystem.enabled ?
             //: Info label
-            //% "NFC not supported"
-            !NfcSystem.present ? qsTrId("yubikey-info-nfc_not_supported") :
-            //: Hint label
-            //% "Touch a YubiKey NFC"
-            NfcSystem.enabled ? qsTrId("yubikey-info-touch_hint") :
+            //% "Insert YubiKey into the USB port or tap it if it supports NFC"
+            qsTrId("yubikey-info-insert_or_tap") :
             //: Info label
-            //% "NFC is off"
-            qsTrId("yubikey-info-nfc_disabled")
-
-        Behavior on opacity { FadeAnimation {} }
+            //% "Insert YubiKey into the USB port"
+            qsTrId("yubikey-info-insert")
     }
 
     Timer {
@@ -80,7 +63,7 @@ Item {
             margins: Theme.paddingMedium
         }
         iconSource: "images/settings.svg"
-        opacity: (showButtonTimer.running && !_targetPresent) ? 1 : 0
+        opacity: showButtonTimer.running ? 1 : 0
         visible: opacity > 0
         onClicked: {
             showButtonTimer.stop()

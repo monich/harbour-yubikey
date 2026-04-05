@@ -27,9 +27,6 @@ Page {
     readonly property bool _authorized: yubiKey.authAccess === YubiKey.AccessOpen ||
         yubiKey.authAccess === YubiKey.AccessGranted
 
-    // Otherwise width is changing with a delay, causing visible layout changes
-    onIsLandscapeChanged: width = isLandscape ? Screen.height : Screen.width
-
     onStatusChanged: {
         if (status === PageStatus.Active) {
             backNavigation = Qt.binding(function() { return !yubiKeyPresent})
@@ -81,7 +78,7 @@ Page {
             "acceptDestination": waitOpPageComponent,
             "acceptDestinationProperties": {
                 //: Status label
-                //% "Touch the same YubiKey to reset it"
+                //% "Tap the same YubiKey to reset it"
                 "text": qsTrId("yubikey-status-waiting_to_reset")
             }
         }).accepted.connect(function() {
@@ -92,7 +89,7 @@ Page {
             if (!yubiKeyPresent) {
                 pageStack.replaceAbove(thisPage, waitOpPageComponent, {
                     //: Status label
-                    //% "Touch the same YubiKey to reset it"
+                    //% "Tap the same YubiKey to reset it"
                     "text": qsTrId("yubikey-status-waiting_to_reset"),
                     "op": op})
             }
@@ -104,7 +101,7 @@ Page {
         var op = yubiKey.clearPassword()
         pageStack.push(waitOpPageComponent, {
             //: Status label
-            //% "Touch the same YubiKey to clear the password"
+            //% "Tap the same YubiKey to clear the password"
             "text":  qsTrId("yubikey-wait-clear_password"),
             "op": op
         }).opFinished.connect(_returnToYubiKeyPage)
@@ -181,7 +178,7 @@ Page {
             //% "Please type in your YubiKey password one more time"
             qsTrId("yubikey-confirm_password-prompt-set"),
             //: Status label
-            //% "Touch the same YubiKey to set the password"
+            //% "Tap the same YubiKey to set the password"
             qsTrId("yubikey-wait-set_password"),
             //: Pop-up notification
             //% "YubiKey has been password protected"
@@ -197,7 +194,7 @@ Page {
             //% "Please type in your new YubiKey password one more time"
             qsTrId("yubikey-confirm_password-prompt-change"),
             //: Status label
-            //% "Touch the same YubiKey to change the password"
+            //% "Tap the same YubiKey to change the password"
             qsTrId("yubikey-wait-change_password"),
             //: Pop-up notification
             //% "YubiKey password has been changed"
@@ -316,7 +313,7 @@ Page {
             acceptDestinationAction: yubiKeyPresent  ? PageStackAction.Pop : PageStackAction.Push
             acceptDestination: yubiKeyPresent ? thisPage : waitOpPageComponent
             //: Status label
-            //% "Touch the same YubiKey to save the token"
+            //% "Tap the same YubiKey to save the token"
             acceptDestinationProperties: { "text":  qsTrId("yubikey-wait-put_token") }
         }
     }
@@ -350,7 +347,7 @@ Page {
                 //% "Saving the tokens..."
                 qsTrId("yubikey-wait-saving_tokens") :
                 //: Status label
-                //% "Touch the same YubiKey to save the selected tokens"
+                //% "Tap the same YubiKey to save the selected tokens"
                 qsTrId("yubikey-wait-put_selected_tokens")
 
         }
@@ -513,12 +510,17 @@ Page {
                         readonly property bool itemCanCopyPassword: !itemMarkedForRefresh && !itemMarkedForDeletion && itemPassword !== ""
                         readonly property bool itemCanRename: !itemMarkedForRefresh && !itemMarkedForDeletion &&
                             yubiKey.yubiKeyVersion >= YubiKey.Version_5_3_0
+                        readonly property bool itemUsbRefreshActive: itemMarkedForRefresh &&
+                            model.entryOpState === YubiKeyOtpListModel.EntryOpStateActive &&
+                            yubiKey.transport === YubiKey.TransportUSB
 
                         landscape: thisPage.isLandscape
                         name: itemName
                         newName: model.newName
                         type: model.type
+                        transport: yubiKey.transport
                         entryOp: model.entryOp
+                        entryOpState: model.entryOpState
                         password: itemPassword
                         steam: model.steam
                         favorite: itemFavorite
@@ -544,7 +546,7 @@ Page {
                                     //: Context menu item
                                     //% "Cancel refresh"
                                     text: qsTrId("yubikey-menu-cancel_refresh")
-                                    enabled: delegate.itemMarkedForRefresh
+                                    enabled: delegate.itemMarkedForRefresh && !delegate.itemUsbRefreshActive
                                     onEnabledChanged: contextMenu.updateItems()
                                     onClicked: delegate.cancelPendingOp()
                                 }

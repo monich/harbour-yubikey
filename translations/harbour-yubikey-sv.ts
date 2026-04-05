@@ -109,34 +109,29 @@
         <translation>Rensar YubiKey-lösenordet</translation>
     </message>
     <message id="yubikey-status-waiting_to_reset">
-        <source>Touch the same YubiKey to reset it</source>
+        <source>Tap the same YubiKey to reset it</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot samma YubiKey för att återställa den</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att återställa den</translation>
     </message>
     <message id="yubikey-status-waiting_to_authorize">
-        <source>Touch the same YubiKey to validate the password</source>
+        <source>Tap the same YubiKey to validate the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot samma YubiKey för att validera lösenordet</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att validera lösenordet</translation>
     </message>
     <message id="yubikey-status-validating_password">
         <source>Validating the password</source>
         <extracomment>Status label</extracomment>
         <translation>Validerar lösenordet</translation>
     </message>
-    <message id="yubikey-info-nfc_not_supported">
-        <source>NFC not supported</source>
+    <message id="yubikey-info-insert">
+        <source>Insert YubiKey into the USB port</source>
         <extracomment>Info label</extracomment>
-        <translation>NFC stöds inte</translation>
+        <translation type="unfinished">Sätt i YubiKey i USB-porten</translation>
     </message>
-    <message id="yubikey-info-nfc_disabled">
-        <source>NFC is off</source>
+    <message id="yubikey-info-insert_or_tap">
+        <source>Insert YubiKey into the USB port or tap it if it supports NFC</source>
         <extracomment>Info label</extracomment>
-        <translation>NFC är av</translation>
-    </message>
-    <message id="yubikey-info-touch_hint">
-        <source>Touch a YubiKey NFC</source>
-        <extracomment>Hint label</extracomment>
-        <translation>Håll telefonen mot en YubiKey NFC</translation>
+        <translation type="unfinished">Sätt i YubiKey i USB-porten eller tryck på den om den stöder NFC</translation>
     </message>
     <message id="yubikey-info-serial">
         <source>Serial: %1</source>
@@ -184,29 +179,29 @@
         <translation>Nytt lösenord igen</translation>
     </message>
     <message id="yubikey-wait-change_password">
-        <source>Touch the same YubiKey to change the password</source>
+        <source>Tap the same YubiKey to change the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot samma YubiKey för att ändra lösenordet</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att ändra lösenordet</translation>
     </message>
     <message id="yubikey-wait-set_password">
-        <source>Touch the same YubiKey to set the password</source>
+        <source>Tap the same YubiKey to set the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot samma YubiKey för att ange lösenordet</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att ange lösenordet</translation>
     </message>
     <message id="yubikey-wait-clear_password">
-        <source>Touch the same YubiKey to clear the password</source>
+        <source>Tap the same YubiKey to clear the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot samma YubiKey för att ta bort lösenordet</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att ta bort lösenordet</translation>
     </message>
     <message id="yubikey-wait-put_token">
-        <source>Touch the same YubiKey to save the token</source>
+        <source>Tap the same YubiKey to save the token</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot samma YubiKey för att spara token</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att spara token</translation>
     </message>
     <message id="yubikey-wait-put_selected_tokens">
-        <source>Touch the same YubiKey to save the selected tokens</source>
+        <source>Tap the same YubiKey to save the selected tokens</source>
         <extracomment>Status label</extracomment>
-        <translation>Håll telefonen mot samma YubiKey för att spara de valda tokens</translation>
+        <translation type="unfinished">Håll telefonen mot samma YubiKey för att spara de valda tokens</translation>
     </message>
     <message id="yubikey-wait-saving_tokens">
         <source>Saving the tokens...</source>
@@ -423,15 +418,25 @@
         <extracomment>Pop-up notification (%1 is the error message/code)</extracomment>
         <translation>Kunde inte spara en eller flera tokens (%1)</translation>
     </message>
-    <message id="yubikey-item-touch_to_delete">
-        <source>Touch YubiKey to delete this token</source>
+    <message id="yubikey-item-tap_to_delete">
+        <source>Tap YubiKey to delete this token</source>
         <extracomment>List item text</extracomment>
-        <translation>Håll telefonen mot YubiKey för att ta bort denna token</translation>
+        <translation type="unfinished">Håll telefonen mot YubiKey för att ta bort denna token</translation>
     </message>
-    <message id="yubikey-item-touch_to_rename">
-        <source>Touch YubiKey to rename this token</source>
+    <message id="yubikey-item-tap_to_rename">
+        <source>Tap YubiKey to rename this token</source>
         <extracomment>List item text</extracomment>
-        <translation>Håll telefonen mot YubiKey för att byta namn på denna token</translation>
+        <translation type="unfinished">Håll telefonen mot YubiKey för att byta namn på denna token</translation>
+    </message>
+    <message id="yubikey-item-touch_to_refresh">
+        <source>Touch YubiKey button to refresh</source>
+        <extracomment>List item text (for USB key)</extracomment>
+        <translation type="unfinished">Tryck på YubiKey-knappen för att uppdatera</translation>
+    </message>
+    <message id="yubikey-item-tap_to_refresh">
+        <source>Tap YubiKey to refresh</source>
+        <extracomment>List item text</extracomment>
+        <translation type="unfinished">Håll telefonen mot YubiKey för att uppdatera</translation>
     </message>
     <message id="yubikey-settings-version">
         <source>Version %1</source>

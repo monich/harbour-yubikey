@@ -109,34 +109,29 @@
         <translation>Clearing YubiKey password</translation>
     </message>
     <message id="yubikey-status-waiting_to_reset">
-        <source>Touch the same YubiKey to reset it</source>
+        <source>Tap the same YubiKey to reset it</source>
         <extracomment>Status label</extracomment>
-        <translation>Touch the same YubiKey to reset it</translation>
+        <translation>Tap the same YubiKey to reset it</translation>
     </message>
     <message id="yubikey-status-waiting_to_authorize">
-        <source>Touch the same YubiKey to validate the password</source>
+        <source>Tap the same YubiKey to validate the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Touch the same YubiKey to validate the password</translation>
+        <translation>Tap the same YubiKey to validate the password</translation>
     </message>
     <message id="yubikey-status-validating_password">
         <source>Validating the password</source>
         <extracomment>Status label</extracomment>
         <translation>Validating the password</translation>
     </message>
-    <message id="yubikey-info-nfc_not_supported">
-        <source>NFC not supported</source>
+    <message id="yubikey-info-insert">
+        <source>Insert YubiKey into the USB port</source>
         <extracomment>Info label</extracomment>
-        <translation>NFC not supported</translation>
+        <translation>Insert YubiKey into the USB port</translation>
     </message>
-    <message id="yubikey-info-nfc_disabled">
-        <source>NFC is off</source>
+    <message id="yubikey-info-insert_or_tap">
+        <source>Insert YubiKey into the USB port or tap it if it supports NFC</source>
         <extracomment>Info label</extracomment>
-        <translation>NFC is off</translation>
-    </message>
-    <message id="yubikey-info-touch_hint">
-        <source>Touch a YubiKey NFC</source>
-        <extracomment>Hint label</extracomment>
-        <translation>Touch a YubiKey NFC</translation>
+        <translation>Insert YubiKey into the USB port or tap it if it supports NFC</translation>
     </message>
     <message id="yubikey-info-serial">
         <source>Serial: %1</source>
@@ -184,29 +179,29 @@
         <translation>New password again</translation>
     </message>
     <message id="yubikey-wait-change_password">
-        <source>Touch the same YubiKey to change the password</source>
+        <source>Tap the same YubiKey to change the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Touch the same YubiKey to change the password</translation>
+        <translation>Tap the same YubiKey to change the password</translation>
     </message>
     <message id="yubikey-wait-set_password">
-        <source>Touch the same YubiKey to set the password</source>
+        <source>Tap the same YubiKey to set the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Touch the same YubiKey to set the password</translation>
+        <translation>Tap the same YubiKey to set the password</translation>
     </message>
     <message id="yubikey-wait-clear_password">
-        <source>Touch the same YubiKey to clear the password</source>
+        <source>Tap the same YubiKey to clear the password</source>
         <extracomment>Status label</extracomment>
-        <translation>Touch the same YubiKey to clear the password</translation>
+        <translation>Tap the same YubiKey to clear the password</translation>
     </message>
     <message id="yubikey-wait-put_token">
-        <source>Touch the same YubiKey to save the token</source>
+        <source>Tap the same YubiKey to save the token</source>
         <extracomment>Status label</extracomment>
-        <translation>Touch the same YubiKey to save the token</translation>
+        <translation>Tap the same YubiKey to save the token</translation>
     </message>
     <message id="yubikey-wait-put_selected_tokens">
-        <source>Touch the same YubiKey to save the selected tokens</source>
+        <source>Tap the same YubiKey to save the selected tokens</source>
         <extracomment>Status label</extracomment>
-        <translation>Touch the same YubiKey to save the selected tokens</translation>
+        <translation>Tap the same YubiKey to save the selected tokens</translation>
     </message>
     <message id="yubikey-wait-saving_tokens">
         <source>Saving the tokens...</source>
@@ -423,15 +418,25 @@
         <extracomment>Pop-up notification (%1 is the error message/code)</extracomment>
         <translation>Failed to save one or more tokens (%1)</translation>
     </message>
-    <message id="yubikey-item-touch_to_delete">
-        <source>Touch YubiKey to delete this token</source>
+    <message id="yubikey-item-tap_to_delete">
+        <source>Tap YubiKey to delete this token</source>
         <extracomment>List item text</extracomment>
-        <translation>Touch YubiKey to delete this token</translation>
+        <translation>Tap YubiKey to delete this token</translation>
     </message>
-    <message id="yubikey-item-touch_to_rename">
-        <source>Touch YubiKey to rename this token</source>
+    <message id="yubikey-item-tap_to_rename">
+        <source>Tap YubiKey to rename this token</source>
         <extracomment>List item text</extracomment>
-        <translation>Touch YubiKey to rename this token</translation>
+        <translation>Tap YubiKey to rename this token</translation>
+    </message>
+    <message id="yubikey-item-touch_to_refresh">
+        <source>Touch YubiKey button to refresh</source>
+        <extracomment>List item text (for USB key)</extracomment>
+        <translation>Touch YubiKey button to refresh</translation>
+    </message>
+    <message id="yubikey-item-tap_to_refresh">
+        <source>Tap YubiKey to refresh</source>
+        <extracomment>List item text</extracomment>
+        <translation>Tap YubiKey to refresh</translation>
     </message>
     <message id="yubikey-settings-version">
         <source>Version %1</source>

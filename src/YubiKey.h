@@ -59,6 +59,7 @@ class YubiKey :
     Q_PROPERTY(uint yubiKeyVersion READ yubiKeyVersion NOTIFY yubiKeyVersionChanged)
     Q_PROPERTY(QString yubiKeyVersionString READ yubiKeyVersionString NOTIFY yubiKeyVersionChanged)
     Q_PROPERTY(AuthAccess authAccess READ authAccess NOTIFY authAccessChanged)
+    Q_PROPERTY(Transport transport READ transport NOTIFY transportChanged)
     Q_PROPERTY(QList<YubiKeyOtp> otpList READ otpList NOTIFY otpListChanged)
     Q_PROPERTY(bool otpListFetched READ otpListFetched NOTIFY otpListFetchedChanged)
     Q_PROPERTY(bool present READ present NOTIFY presentChanged)
@@ -68,6 +69,7 @@ class YubiKey :
     Q_PROPERTY(qreal totpTimeLeft READ totpTimeLeft NOTIFY totpTimeLeftChanged)
     Q_ENUMS(AuthAccess)
     Q_ENUMS(Constants)
+    Q_ENUMS(Transport)
 
 public:
     enum Constants {
@@ -92,6 +94,12 @@ public:
         ErrorNoSpace = YubiKeyConstants::RC_NO_SPACE
     };
 
+    enum Transport {
+        TransportUnknown,
+        TransportNFC,
+        TransportUSB
+    };
+
     enum AuthAccess {
         AccessUnknown = YubiKeyAuthAccessUnknown,
         AccessNotActivated = YubiKeyAuthAccessNotActivated,
@@ -111,6 +119,7 @@ public:
     uint yubiKeySerial() const;
     uint yubiKeyVersion() const;
     QString yubiKeyVersionString() const;
+    Transport transport() const;
     AuthAccess authAccess() const;
     QList<YubiKeyOtp> otpList() const;
     bool otpListFetched() const;
@@ -140,6 +149,7 @@ Q_SIGNALS:
     void yubiKeyIdChanged();
     void yubiKeySerialChanged();
     void yubiKeyVersionChanged();
+    void transportChanged();
     void authAccessChanged();
     void otpListChanged();
     void otpListFetchedChanged();

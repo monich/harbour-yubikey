@@ -8,7 +8,9 @@ ListItem {
     id: thisItem
 
     property int type
+    property int transport
     property int entryOp
+    property int entryOpState
     property string name
     property string newName
     property string password
@@ -17,12 +19,14 @@ ListItem {
     property bool expired
     property bool landscape
 
-    readonly property bool _markedForRefresh: entryOp === YubiKeyOtpListModel.EntryOpRefresh
+    readonly property bool _usb: transport === YubiKey.TransportUSB
+    readonly property bool _operationActive: entryOpState === YubiKeyOtpListModel.EntryOpStateActive
     readonly property bool _markedForRename: entryOp === YubiKeyOtpListModel.EntryOpRename
+    readonly property bool _markedForRefresh: entryOp === YubiKeyOtpListModel.EntryOpRefresh
     readonly property bool _markedForDeletion: entryOp === YubiKeyOtpListModel.EntryOpDelete
     readonly property bool _markedForDeletionOrRename: _markedForDeletion || _markedForRename
-    readonly property bool _operationPending: _markedForDeletionOrRename || _markedForRefresh
-
+    readonly property bool _marked: _markedForDeletionOrRename || _markedForRefresh
+    readonly property bool _needPhysicalTouch: _markedForRefresh && _usb && _operationActive
 
     contentHeight: Theme.itemSizeMedium
 
@@ -73,21 +77,32 @@ ListItem {
             opacity: _markedForDeletionOrRename ? 0.4 : 1
         }
 
-        Label {
+        HarbourMarqueeText {
             width: parent.width
             color: favorite ? Theme.secondaryColor : Theme.secondaryHighlightColor
             font {
                 pixelSize: Theme.fontSizeExtraSmall
                 bold: favorite
             }
-            truncationMode: TruncationMode.Fade
-            opacity: _markedForDeletionOrRename ? 0.4 : 1
-            //: List item text
-            //% "Touch YubiKey to delete this token"
-            text: _markedForDeletion ? qsTrId("yubikey-item-touch_to_delete") :
+            speed: 0.5
+            autoStartDelay: 2000
+            opacity: (_markedForDeletionOrRename || (_markedForRefresh && _usb)) ? 0.4 : 1
+            text: _needPhysicalTouch ?
+                //: List item text (for USB key)
+                //% "Touch YubiKey button to refresh"
+                qsTrId("yubikey-item-touch_to_refresh") :
+                _markedForDeletion ?
                 //: List item text
-                //% "Touch YubiKey to rename this token"
-                _markedForRename ? qsTrId("yubikey-item-touch_to_rename")  :
+                //% "Tap YubiKey to delete this token"
+                qsTrId("yubikey-item-tap_to_delete") :
+                _markedForRename ?
+                //: List item text
+                //% "Tap YubiKey to rename this token"
+                qsTrId("yubikey-item-tap_to_rename") :
+                _markedForRefresh ?
+                //: List item text
+                //% "Tap YubiKey to refresh"
+                qsTrId("yubikey-item-tap_to_refresh") :
                 steam ? "Steam" :
                 type === YubiKey.TypeTOTP ? "TOTP" :
                 type === YubiKey.TypeHOTP ? "HOTP" :
@@ -105,15 +120,34 @@ ListItem {
             rightMargin: thisItem.landscape ? Theme.paddingLarge : Theme.horizontalPageMargin
         }
 
-        IconButton {
-            id: actionButton
-
+        Item {
+            width: actionButton.width
+            height: width
             anchors.verticalCenter: parent.verticalCenter
-            highlighted: down || thisItem.down
-            visible: _markedForDeletionOrRename || _refreshable
-            opacity: menuOpen ? 0.4 : 1
-            icon.source: _operationPending ? "image://theme/icon-m-clear" : "image://theme/icon-m-refresh"
-            onClicked: _operationPending ? thisItem.cancel() : thisItem.requestRefresh()
+
+            Loader {
+                active: opacity > 0
+                opacity: _needPhysicalTouch ? 1 : 0
+                anchors.centerIn: actionButton
+                sourceComponent: Component {
+                    YubiKeyTouchIcon {
+                        blinking: true
+                        width: Theme.itemSizeSmall - 2 * Theme.paddingMedium
+                        height: width
+                    }
+                }
+            }
+
+            IconButton {
+                id: actionButton
+
+                anchors.centerIn: parent
+                highlighted: down || thisItem.down
+                visible: (_markedForDeletionOrRename || _refreshable) && ! _needPhysicalTouch
+                opacity: menuOpen ? 0.4 : 1
+                icon.source: _marked ? "image://theme/icon-m-clear" : "image://theme/icon-m-refresh"
+                onClicked: _marked ? thisItem.cancel() : thisItem.requestRefresh()
+            }
         }
 
         Label {

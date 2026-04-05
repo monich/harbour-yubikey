@@ -292,9 +292,25 @@ YubiKeyOtpListModel::Entry::updateOp()
     }
 
     if (iOpState != opState) {
+        switch (opState) {
+        case EntryOpStateQueued:
+        case EntryOpStateActive:
+        case EntryOpStateNone:
+            break;
+        case EntryOpStateFinished:
+        case EntryOpStateFailed:
+            // Drop the ops in Finished and Failed states
+            opState = EntryOpStateNone;
+            break;
+        }
+
         HDEBUG(iOtp.iName.constData() << iOpState << "=>" << opState);
         iOpState = opState;
         roles.insert(EntryOpStateRole);
+
+        if (opState == EntryOpStateNone) {
+            roles = setOp(Q_NULLPTR, EntryOpNone, roles);
+        }
     }
 
     return roles;
@@ -322,6 +338,8 @@ class YubiKeyOtpListModel::Private :
     static const SignalEmitter gSignalEmitters[];
 
 public:
+    typedef YubiKeyOp* (YubiKey::*CreateOp)(QByteArray aName);
+
     Private(YubiKeyOtpListModel*);
 
     YubiKeyOtpListModel* parentModel();
@@ -341,6 +359,7 @@ public:
     int findName(const QByteArray&) const;
     int findOp(YubiKeyOp*) const;
     void startOp(int, YubiKeyOp*, EntryOp, const QSet<int>& aRoles = QSet<int>());
+    void startTokenOp(const QByteArray&, CreateOp, EntryOp);
     void deleteToken(QByteArray);
     void refreshToken(QByteArray);
     void renameToken(QByteArray, const QString&);
@@ -787,8 +806,10 @@ YubiKeyOtpListModel::Private::startOp(
     if (entry->iOp) {
         entry->iOp->disconnect(this);
     }
-    connect(aOp, SIGNAL(opStateChanged()), SLOT(onEntryOpStateChanged()));
     signalEntryChanges(aRow, entry->setOp(aOp, aOpType, aRoles));
+    if (aOp) {
+        connect(aOp, SIGNAL(opStateChanged()), SLOT(onEntryOpStateChanged()));
+    }
     if (entry->iFavorite) {
         setFavoriteMarkedForRefresh(entry->iOpType == EntryOpRefresh);
     }
@@ -810,7 +831,7 @@ YubiKeyOtpListModel::Private::cancelOp(
                 iYubiKey->listAndCalculateAll();
                 signalEntryChanges(row, entry->setOp(Q_NULLPTR, EntryOpNone));
                 if (entry->iFavorite) {
-                    setFavoriteMarkedForRefresh(entry->iOpType == EntryOpRefresh);
+                    setFavoriteMarkedForRefresh(false);
                 }
             }
         }
@@ -832,36 +853,30 @@ YubiKeyOtpListModel::Private::onEntryOpStateChanged()
 }
 
 void
-YubiKeyOtpListModel::Private::deleteToken(
-    QByteArray aName)
+YubiKeyOtpListModel::Private::startTokenOp(
+    const QByteArray& aName,
+    CreateOp aCreateOp,
+    EntryOp aOpType)
 {
     const int row = findName(aName);
 
-    if (iYubiKey && row >= 0) {
-        startOp(row, iYubiKey->deleteToken(aName), EntryOpDelete);
+    if (iYubiKey && row >= 0 && iList[row].iOpType != aOpType) {
+        startOp(row, (iYubiKey->*aCreateOp)(aName), aOpType);
     }
+}
+
+void
+YubiKeyOtpListModel::Private::deleteToken(
+    QByteArray aName)
+{
+    startTokenOp(aName, &YubiKey::deleteToken, EntryOpDelete);
 }
 
 void
 YubiKeyOtpListModel::Private::refreshToken(
     QByteArray aName)
 {
-    const int row = findName(aName);
-
-    if (iYubiKey && row >= 0) {
-        Entry* entry = &iList[row];
-
-        if (entry->iOpType != EntryOpRefresh) {
-            if (entry->iOp) {
-                entry->iOp->disconnect(this);
-            }
-            signalEntryChanges(row, entry->setOp(iYubiKey->
-                refreshToken(aName), EntryOpRefresh));
-            if (entry->iFavorite) {
-                setFavoriteMarkedForRefresh(entry->iOpType == EntryOpRefresh);
-            }
-        }
-    }
+    startTokenOp(aName, &YubiKey::refreshToken, EntryOpRefresh);
 }
 
 void
@@ -964,7 +979,7 @@ YubiKeyOtpListModel::refreshToken(
     QString aName)
 {
     HDEBUG(aName);
-    iPrivate->refreshToken(YubiKeyUtil::nameToUtf8(aName));
+    iPrivate->refreshToken(aName.toUtf8());
     iPrivate->emitQueuedSignals();
 }
 

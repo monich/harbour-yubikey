@@ -36,31 +36,59 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef _YUBIKEY_IO_MANAGER_H
-#define _YUBIKEY_IO_MANAGER_H
+#ifndef _YUBIKEY_USB_IO_H
+#define _YUBIKEY_USB_IO_H
 
-#include <QtCore/QObject>
+struct libusb_context;
+struct libusb_device;
 
-class YubiKeyIo;
+#include "YubiKeyIo.h"
 
-class YubiKeyIoManager :
-    public QObject
+class YubiKeyUsbIo :
+    public YubiKeyIo
 {
     Q_OBJECT
-    Q_PROPERTY(YubiKeyIo* yubiKeyIo READ yubiKeyIo NOTIFY yubiKeyIoChanged)
 
 public:
-    explicit YubiKeyIoManager(QObject* aParent = Q_NULLPTR);
-    ~YubiKeyIoManager();
+    struct IntfAlt {
+        int iIntfNum;
+        int iAltSetting;
+    };
 
-    YubiKeyIo* yubiKeyIo() const;
+    class Context
+    {
+    public:
+        Context();
+        Context(const Context&);
+        ~Context();
 
-Q_SIGNALS:
-    void yubiKeyIoChanged();
+        Context& operator = (const Context&);
+        operator struct libusb_context*() const;
+
+    private:
+        class Private;
+        Private* iPrivate;
+    };
+
+    YubiKeyUsbIo(Context, libusb_device*, IntfAlt, QObject*);
+    ~YubiKeyUsbIo();
+
+    void gone();
+
+    // YubiKeyIo
+    const char* ioPath() const Q_DECL_OVERRIDE;
+    Transport ioTransport() const Q_DECL_OVERRIDE;
+    IoState ioState() const Q_DECL_OVERRIDE;
+    uint ioSerial() const Q_DECL_OVERRIDE;
+    IoLock ioLock() Q_DECL_OVERRIDE;
+    YubiKeyIoTx* ioTransmit(const APDU&) Q_DECL_OVERRIDE;
 
 private:
+    class Tx;
+    class Lock;
+    class Handle;
     class Private;
     Private* iPrivate;
 };
 
-#endif // _YUBIKEY_IO_MANAGER_H
+#endif // _YUBIKEY_USB_IO_H

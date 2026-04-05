@@ -57,6 +57,7 @@
 // s(SignalName,signalName)
 #define QUEUED_SIGNALS(s) \
     s(YubiKeyIo,yubiKeyIo) \
+    s(Transport,transport) \
     s(Present,present) \
     s(OtpList,otpList) \
     s(OtpListFetched,otpListFetched) \
@@ -129,6 +130,7 @@ public:
     static YubiKeyOtp updateOtpResponseFull(const YubiKeyOtp&, const GUtilData*);
 
     void setIo(YubiKeyIo*);
+    void updateTransport();
     void updatePresent();
     OtpList mixOtpLists(OtpList);
     void setOtpList(OtpList);
@@ -157,6 +159,7 @@ public:
     QPointer<YubiKeyIo> iIo;
     YubiKeyOpQueue iOpQueue;
     OtpList iOtpList;
+    Transport iTransport;
     bool iPresent;
     int iPasswordUpdateCount;
     bool iOtpListFetched;
@@ -183,6 +186,7 @@ const YubiKeyIo::APDU YubiKey::Private::CALCULATE_ALL_APDU("CALCULATE_ALL", 0x00
 YubiKey::Private::Private(
     YubiKey* aYubiKey) :
     YubiKeyPrivateBase(aYubiKey, gSignalEmitters),
+    iTransport(TransportUnknown),
     iPresent(false),
     iPasswordUpdateCount(0),
     iOtpListFetched(false),
@@ -280,6 +284,7 @@ YubiKey::Private::setIo(
         }
         iIo = aIo;
         iOpQueue.setIo(aIo);
+        updateTransport();
         updatePresent();
         if (iHaveBeenReset) {
             iHaveBeenReset = false;
@@ -289,6 +294,28 @@ YubiKey::Private::setIo(
             connect(aIo, SIGNAL(ioStateChanged(YubiKeyIo::IoState)),
                 SLOT(onIoStateChanged()));
         }
+    }
+}
+
+void
+YubiKey::Private::updateTransport()
+{
+    Transport transport = TransportUnknown;
+
+    if (iIo) {
+        switch (iIo->ioTransport()) {
+        case YubiKeyIo::NFC:
+            transport = TransportNFC;
+            break;
+        case YubiKeyIo::USB:
+            transport = TransportUSB;
+            break;
+        }
+    }
+
+    if (iTransport != transport) {
+        iTransport = transport;
+        queueSignal(SignalTransportChanged);
     }
 }
 
@@ -903,6 +930,12 @@ YubiKey::yubiKeyVersionString() const
     return YubiKeyUtil::versionToString(iPrivate->iOpQueue.yubiKeyFwVersion());
 }
 
+YubiKey::Transport
+YubiKey::transport() const
+{
+    return iPrivate->iTransport;
+}
+
 YubiKey::AuthAccess
 YubiKey::authAccess() const
 {
@@ -954,6 +987,7 @@ YubiKey::totpTimeLeft() const
 void
 YubiKey::clear()
 {
+    HDEBUG("flushing the key data");
     iPrivate->iOpQueue.clear();
 }
 

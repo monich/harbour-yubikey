@@ -117,6 +117,11 @@ protected:
     YubiKeyIo(QObject*);
 
 public:
+    enum Transport {
+        NFC,
+        USB
+    };
+
     enum IoState {
         IoUnknown,
         IoReady,
@@ -165,6 +170,7 @@ public:
 
     // Interface
     virtual const char* ioPath() const = 0;
+    virtual Transport ioTransport() const = 0;
     virtual IoState ioState() const = 0;
     virtual uint ioSerial() const = 0;
     virtual IoLock ioLock() = 0;

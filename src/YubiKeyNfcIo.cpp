@@ -649,6 +649,12 @@ YubiKeyNfcIo::ioPath() const
     return iPrivate->iTag->path;
 }
 
+YubiKeyIo::Transport
+YubiKeyNfcIo::ioTransport() const
+{
+    return NFC;
+}
+
 YubiKeyIo::IoState
 YubiKeyNfcIo::ioState() const
 {

@@ -109,12 +109,12 @@
         <translation>Сброс пароля</translation>
     </message>
     <message id="yubikey-status-waiting_to_reset">
-        <source>Touch the same YubiKey to reset it</source>
+        <source>Tap the same YubiKey to reset it</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для сброса</translation>
     </message>
     <message id="yubikey-status-waiting_to_authorize">
-        <source>Touch the same YubiKey to validate the password</source>
+        <source>Tap the same YubiKey to validate the password</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для подтверждения пароля</translation>
     </message>
@@ -123,25 +123,20 @@
         <extracomment>Status label</extracomment>
         <translation>Проверка пароля</translation>
     </message>
-    <message id="yubikey-info-nfc_not_supported">
-        <source>NFC not supported</source>
+    <message id="yubikey-info-insert">
+        <source>Insert YubiKey into the USB port</source>
         <extracomment>Info label</extracomment>
-        <translation>Извините, но кажется ваш телефон не поддерживает NFC</translation>
+        <translation>Попробуйте подсоединить YubiKey к телефону через USB</translation>
     </message>
-    <message id="yubikey-info-nfc_disabled">
-        <source>NFC is off</source>
+    <message id="yubikey-info-insert_or_tap">
+        <source>Insert YubiKey into the USB port or tap it if it supports NFC</source>
         <extracomment>Info label</extracomment>
-        <translation>NFC выключено, попробуйте включить его</translation>
-    </message>
-    <message id="yubikey-info-touch_hint">
-        <source>Touch a YubiKey NFC</source>
-        <extracomment>Hint label</extracomment>
-        <translation>Поднесите YubiKey с поддержкой NFC и возможно что-то произойдёт</translation>
+        <translation>Подсоедините YubiKey через USB или поднесите его к телефону если он поддерживает NFC</translation>
     </message>
     <message id="yubikey-info-serial">
         <source>Serial: %1</source>
         <extracomment>Card info label</extracomment>
-        <translation>Серийный номер: %1</translation>
+        <translation>Серийник: %1</translation>
     </message>
     <message id="yubikey-info-firmware">
         <source>Firmware: %1</source>
@@ -184,27 +179,27 @@
         <translation>Новый пароль ещё раз</translation>
     </message>
     <message id="yubikey-wait-change_password">
-        <source>Touch the same YubiKey to change the password</source>
+        <source>Tap the same YubiKey to change the password</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для смены пароля</translation>
     </message>
     <message id="yubikey-wait-set_password">
-        <source>Touch the same YubiKey to set the password</source>
+        <source>Tap the same YubiKey to set the password</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для установки пароля</translation>
     </message>
     <message id="yubikey-wait-clear_password">
-        <source>Touch the same YubiKey to clear the password</source>
+        <source>Tap the same YubiKey to clear the password</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для сброса пароля</translation>
     </message>
     <message id="yubikey-wait-put_token">
-        <source>Touch the same YubiKey to save the token</source>
+        <source>Tap the same YubiKey to save the token</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для записи кода</translation>
     </message>
     <message id="yubikey-wait-put_selected_tokens">
-        <source>Touch the same YubiKey to save the selected tokens</source>
+        <source>Tap the same YubiKey to save the selected tokens</source>
         <extracomment>Status label</extracomment>
         <translation>Поднесите тот же самый YubiKey для записи выбранных кодов</translation>
     </message>
@@ -423,15 +418,25 @@
         <extracomment>Pop-up notification (%1 is the error message/code)</extracomment>
         <translation>Один или несколько кодов сохранить не удалось (%1)</translation>
     </message>
-    <message id="yubikey-item-touch_to_delete">
-        <source>Touch YubiKey to delete this token</source>
+    <message id="yubikey-item-tap_to_delete">
+        <source>Tap YubiKey to delete this token</source>
         <extracomment>List item text</extracomment>
         <translation>Поднесите YubiKey для удаления</translation>
     </message>
-    <message id="yubikey-item-touch_to_rename">
-        <source>Touch YubiKey to rename this token</source>
+    <message id="yubikey-item-tap_to_rename">
+        <source>Tap YubiKey to rename this token</source>
         <extracomment>List item text</extracomment>
         <translation>Поднесите YubiKey для переименования</translation>
+    </message>
+    <message id="yubikey-item-touch_to_refresh">
+        <source>Touch YubiKey button to refresh</source>
+        <extracomment>List item text (for USB key)</extracomment>
+        <translation>Прикоснитесь к YubiKey для генерации нового пароля</translation>
+    </message>
+    <message id="yubikey-item-tap_to_refresh">
+        <source>Tap YubiKey to refresh</source>
+        <extracomment>List item text</extracomment>
+        <translation>Поднесите YubiKey для генерации нового пароля</translation>
     </message>
     <message id="yubikey-settings-version">
         <source>Version %1</source>
@@ -461,7 +466,7 @@
     <message id="yubikey-settings-saved_passwords-none">
         <source>No YubiKey passwords stored on this device</source>
         <extracomment>Info label</extracomment>
-        <translation>Всё чисто, никаких паролей на устройстве не хранится</translation>
+        <translation>Всё чисто, никаких паролей на этом телефоне не хранится</translation>
     </message>
 </context>
 </TS>

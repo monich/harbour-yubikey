@@ -6,19 +6,17 @@ CONFIG += sailfishapp link_pkgconfig
 PKGCONFIG += sailfishapp mlite5 glib-2.0 gobject-2.0 gio-unix-2.0
 QT += qml quick dbus multimedia concurrent
 
+!CONFIG(yubikey_disable_usb) {
+    PKGCONFIG += libusb-1.0
+    DEFINES += YUBIKEY_USB
+}
+
 DEFINES += NFCDC_NEED_PEER_SERVICE=0
 QMAKE_CXXFLAGS += -Wno-unused-parameter
 QMAKE_CFLAGS += -Wno-unused-parameter
 LIBS += -ldl
 
 TARGET_DATA_DIR = /usr/share/$${TARGET}
-
-app_settings {
-    # This path is hardcoded in jolla-settings
-    TRANSLATIONS_PATH = /usr/share/translations
-} else {
-    TRANSLATIONS_PATH = $${TARGET_DATA_DIR}/translations
-}
 
 CONFIG(debug, debug|release) {
     DEFINES += DEBUG HARBOUR_DEBUG
@@ -105,6 +103,20 @@ SOURCES += \
     src/YubiKeySettings.cpp \
     src/YubiKeyToken.cpp \
     src/YubiKeyUtil.cpp
+
+# USB
+
+!CONFIG(yubikey_disable_usb) {
+HEADERS += \
+    src/YubiKeyUsbIo.h \
+
+SOURCES += \
+    src/YubiKeyUsbIo.cpp \
+
+OTHER_FILES += \
+    00-harbour-yubikey.rules
+}
+
 
 # libfoil
 
@@ -301,6 +313,12 @@ nfcd_config.files = $${_PRO_FILE_PWD_}/_harbour-yubikey.conf
 nfcd_config.path = /etc/nfcd/ndef-handlers
 INSTALLS += nfcd_config
 
+!CONFIG(yubikey_disable_usb) {
+    udev_config.files = $${_PRO_FILE_PWD_}/00-harbour-yubikey.rules
+    udev_config.path = /lib/udev/rules.d/
+    INSTALLS += udev_config
+}
+
 # Icons
 
 ICON_SIZES = 86 108 128 172 256
@@ -314,7 +332,8 @@ for(s, ICON_SIZES) {
 
 # Translations
 
-TRANSLATION_IDBASED=-idbased
+TRANSLATIONS_PATH = $${TARGET_DATA_DIR}/translations
+TRANSLATION_IDBASED = -idbased
 TRANSLATION_SOURCES = \
   $${_PRO_FILE_PWD_}/qml
 

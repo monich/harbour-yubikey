@@ -26,6 +26,14 @@ BuildRequires:  qt5-qttools-linguist
 %{!?qtc_make:%define qtc_make make}
 %define _binary_payload w6.xzdio
 
+# USB support is enabled by default
+%{!?yubikey_disable_usb:%define yubikey_disable_usb 0}
+%if %{yubikey_disable_usb} == 0
+BuildRequires:  pkgconfig(libusb-1.0)
+%else
+%define yubikey_qmake_args CONFIG+=yubikey_disable_usb
+%endif
+
 %description
 Allows to use Yubikey NFC for storing OTP secrets
 
@@ -57,7 +65,7 @@ Url:
 %setup -q -n %{name}-%{version}
 
 %build
-%qtc_qmake5 %{name}.pro
+%qtc_qmake5 %{?yubikey_qmake_args} %{name}.pro
 %qtc_make %{?_smp_mflags}
 
 %install
@@ -68,8 +76,16 @@ desktop-file-install --delete-original \
   --dir %{buildroot}%{_datadir}/applications \
    %{buildroot}%{_datadir}/applications/*.desktop
 
+%post
+%if %{yubikey_disable_usb} == 0
+udevadm control --reload-rules ||:
+%endif
+
 %postun
 if [ "$1" == 0 ] ; then
+%if %{yubikey_disable_usb} == 0
+  udevadm control --reload-rules ||:
+%endif
   for d in $(getent passwd | cut -d: -f6) ; do
     if [ "$d" != "" ] && [ "$d" != "/" ] && [ -d "$d/.local/share/harbour-yubikey" ] ; then
       rm -fr "$d/.local/share/harbour-yubikey" ||:
@@ -85,3 +101,6 @@ fi
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 %{_sysconfdir}/dbus-1/system.d/harbour.yubikey.conf
 %{_sysconfdir}/nfcd/ndef-handlers/_harbour-yubikey.conf
+%if %{yubikey_disable_usb} == 0
+%{_udevrulesdir}/00-harbour-yubikey.rules
+%endif

@@ -19,12 +19,14 @@ Page {
     onStatusChanged: {
         switch (status) {
         case PageStatus.Active:
-            yubiKey.clear()
             if (!_initialized) {
                 _initialized = true
                 considerNextPageRequest.schedule()
-            } else if (yubiKeyPage) {
-                yubiKeyPage = null
+            } else {
+                yubiKey.clear()
+                if (yubiKeyPage) {
+                    yubiKeyPage = null
+                }
             }
             break
         case PageStatus.Inactive:
@@ -161,6 +163,8 @@ Page {
             id: frontPanel
 
             anchors.fill: parent
+            landscape: thisPage.isLandscape
+            visible: NfcSystem.valid // To display the right text at startup
             onFlip: {
                 backPanel.refresh()
                 rotation.axis.x = isPortrait ? 0 : 1

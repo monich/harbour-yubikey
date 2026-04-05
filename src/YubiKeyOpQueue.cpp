@@ -221,7 +221,8 @@ public:
     void revalidate();
     void prepare();
     void authorized();
-    void select();
+    void selectOath();
+    void selectOtp();
     YubiKeyAlgorithm authAlgorithm() const;
     QByteArray calculateAuthAccessKey(const QString&);
     QByteArray calculateAuthResponse(const QByteArray&, const QByteArray&);
@@ -231,8 +232,11 @@ public:
 public Q_SLOTS:
     void onIoStateChanged(YubiKeyIo::IoState);
     void onIoDestroyed(QObject*);
-    void onSelectFailed();
-    void onSelectFinished(YubiKeyIoTx::Result, const QByteArray&);
+    void onGetSerialFailed();
+    void onSelectOtpFinished(YubiKeyIoTx::Result, const QByteArray&);
+    void onGetSerialFinished(YubiKeyIoTx::Result, const QByteArray&);
+    void onSelectOathFailed();
+    void onSelectOathFinished(YubiKeyIoTx::Result, const QByteArray&);
     void onValidateFailed();
     void onValidateFinished(YubiKeyIoTx::Result, const QByteArray&);
     void onActiveOpStateChanged();
@@ -534,7 +538,7 @@ YubiKeyOpQueue::Private::startNextOp()
     if (iIo && iIo->canTransmit() && !iActiveOp && !iQueue.isEmpty()) {
         if (iRevalidate) {
             iRevalidate = false;
-            select();
+            selectOath();
             setState(QueuePrepare);
             return;
         } else {
@@ -573,9 +577,16 @@ YubiKeyOpQueue::Private::prepare()
 {
     if (iState != QueuePrepare) {
         setState(QueuePrepare);
+        const bool alreadyLocked = (iIo->ioState() == YubiKeyIo::IoLocked);
+        // If not already locked, ioLock() may change the state to IoLocked
         iLock = iIo->ioLock();
-        if (iIo->ioState() == YubiKeyIo::IoLocked) {
-            select();
+        if (alreadyLocked) {
+            if (iYubiKeySerial) {
+                selectOath();
+            } else {
+                // The I/O failed to provide S/N, try to figure it out
+                selectOtp();
+            }
         }
     }
 }
@@ -691,21 +702,103 @@ YubiKeyOpQueue::Private::revalidate()
 }
 
 void
-YubiKeyOpQueue::Private::select()
+YubiKeyOpQueue::Private::selectOtp()
 {
-    static const uchar AID[] = {0xa0, 0x00, 0x00, 0x05, 0x27, 0x21, 0x01};
-    static const YubiKeyIo::APDU CMD_SELECT("SELECT",
-        0x00, 0xa4, 0x04, 0x00, AID, sizeof(AID));
+    static const uchar AID_OTP[] = {
+        0xa0, 0x00, 0x00, 0x05, 0x27, 0x20, 0x01, 0x01
+    };
+    static const YubiKeyIo::APDU CMD_SELECT_OTP("SELECT",
+        0x00, 0xa4, 0x04, 0x00, AID_OTP, sizeof(AID_OTP));
 
     resetInternalTx();
     requeueActiveOp();
-    if (setInternalTx(iIo->ioTransmit(CMD_SELECT))) {
+    if (setInternalTx(iIo->ioTransmit(CMD_SELECT_OTP))) {
         YubiKeyIoTx* tx = iInternalTx.data();
 
-        connect(tx, SIGNAL(txFailed()), SLOT(onSelectFailed()));
-        connect(tx, SIGNAL(txCancelled()), SLOT(onSelectFailed()));
+        connect(tx, SIGNAL(txFailed()), SLOT(onGetSerialFailed()));
+        connect(tx, SIGNAL(txCancelled()), SLOT(onGetSerialFailed()));
         connect(tx, SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
-            SLOT(onSelectFinished(YubiKeyIoTx::Result,QByteArray)));
+            SLOT(onSelectOtpFinished(YubiKeyIoTx::Result,QByteArray)));
+    } else {
+        selectOath();
+    }
+}
+
+void
+YubiKeyOpQueue::Private::onSelectOtpFinished(
+    YubiKeyIoTx::Result aResult,
+    const QByteArray&)
+{
+    resetInternalTx();
+    if (aResult.success()) {
+        static const YubiKeyIo::APDU CMD_GET_SERIAL("GET_SERIAL", 0x00, 0x01, 0x10);
+
+        HDEBUG("SELECT ok");
+        if (setInternalTx(iIo->ioTransmit(CMD_GET_SERIAL))) {
+            YubiKeyIoTx* tx = iInternalTx.data();
+
+            connect(tx, SIGNAL(txFailed()), SLOT(onGetSerialFailed()));
+            connect(tx, SIGNAL(txCancelled()), SLOT(onGetSerialFailed()));
+            connect(tx, SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
+                SLOT(onGetSerialFinished(YubiKeyIoTx::Result,QByteArray)));
+        } else {
+            selectOath();
+        }
+    } else {
+        HDEBUG("SELECT error" << aResult);
+        selectOath();
+    }
+    emitQueuedSignals();
+}
+
+void
+YubiKeyOpQueue::Private::onGetSerialFinished(
+    YubiKeyIoTx::Result aResult,
+    const QByteArray& aData)
+{
+    resetInternalTx();
+    if (aResult.success()) {
+        uint sn = 0;
+
+        for (int i = 0; i < aData.size(); i++) {
+            sn = (sn << 8) | (uchar) aData.at(i);
+        }
+        HDEBUG("GET_SERIAL ok" << aData.toHex().constData() << "=>" << sn);
+        setYubiKeySerial(sn);
+    } else {
+        HDEBUG("GET_SERIAL error" << aResult);
+    }
+    selectOath();
+    emitQueuedSignals();
+}
+
+void
+YubiKeyOpQueue::Private::onGetSerialFailed()
+{
+    HDEBUG("Failed to query S/N");
+    resetInternalTx();
+    selectOath();
+}
+
+void
+YubiKeyOpQueue::Private::selectOath()
+{
+    static const uchar AID_OATH[] = {
+        0xa0, 0x00, 0x00, 0x05, 0x27, 0x21, 0x01
+    };
+    static const YubiKeyIo::APDU CMD_SELECT_OATH("SELECT",
+        0x00, 0xa4, 0x04, 0x00, AID_OATH, sizeof(AID_OATH));
+
+    resetInternalTx();
+    requeueActiveOp();
+    if (setInternalTx(iIo->ioTransmit(CMD_SELECT_OATH))) {
+        YubiKeyIoTx* tx = iInternalTx.data();
+
+        // SELECT requires special handling upon completion
+        connect(tx, SIGNAL(txFailed()), SLOT(onSelectOathFailed()));
+        connect(tx, SIGNAL(txCancelled()), SLOT(onSelectOathFailed()));
+        connect(tx, SIGNAL(txFinished(YubiKeyIoTx::Result,QByteArray)),
+            SLOT(onSelectOathFinished(YubiKeyIoTx::Result,QByteArray)));
     } else {
         setState(QueueIdle);
     }
@@ -844,7 +937,12 @@ YubiKeyOpQueue::Private::onIoStateChanged(
     YubiKeyIo::IoState /* previous */)
 {
     if (iIo->ioState() == YubiKeyIo::IoLocked && iState == QueuePrepare) {
-        select();
+        if (iYubiKeySerial) {
+            selectOath();
+        } else {
+            // Try to figure out the S/N first
+            selectOtp();
+        }
     }
 }
 
@@ -858,7 +956,7 @@ YubiKeyOpQueue::Private::onIoDestroyed(
 }
 
 void
-YubiKeyOpQueue::Private::onSelectFailed()
+YubiKeyOpQueue::Private::onSelectOathFailed()
 {
     HDEBUG("SELECT failed");
     resetInternalTx();
@@ -876,7 +974,7 @@ YubiKeyOpQueue::Private::onValidateFailed()
 }
 
 void
-YubiKeyOpQueue::Private::onSelectFinished(
+YubiKeyOpQueue::Private::onSelectOathFinished(
     YubiKeyIoTx::Result aResult,
     const QByteArray& aData)
 {
@@ -891,7 +989,6 @@ YubiKeyOpQueue::Private::onSelectFinished(
                 queueSetupSignal(SignalInvalidYubiKeyConnected);
                 setState(QueueBlocked);
             } else {
-                setYubiKeySerial(iIo->ioSerial());
                 setYubiKeyId(response.cardId);
                 setFwVersion(response.version);
                 iAuthAlgorithm = response.authAlg;
@@ -925,14 +1022,12 @@ YubiKeyOpQueue::Private::onSelectFinished(
         } else {
             HDEBUG("Failed to parse the SELECT response");
             setState(QueueIdle);
-            setYubiKeySerial(0);
             setYubiKeyId(QByteArray());
             setFwVersion(QByteArray());
             iAuthChallenge.clear();
         }
     } else {
         setState(QueueIdle);
-        setYubiKeySerial(0);
         setYubiKeyId(QByteArray());
         setFwVersion(QByteArray());
         iAuthChallenge.clear();
@@ -1106,8 +1201,9 @@ YubiKeyOpQueue::Entry::setOpState(
                 case OpFinished:
                     return;
                 }
+                break;
             }
-            break;
+            //fallthrough
         case OpCancelled:
         case OpFinished:
             return;

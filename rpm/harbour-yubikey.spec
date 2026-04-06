@@ -1,6 +1,6 @@
 Name:           harbour-yubikey
-Summary:        YubiKey NFC OTP app
-Version:        1.1.2
+Summary:        YubiKey OTP app
+Version:        1.2.0
 Release:        1
 License:        BSD
 URL:            https://github.com/monich/harbour-yubikey
@@ -35,7 +35,7 @@ BuildRequires:  pkgconfig(libusb-1.0)
 %endif
 
 %description
-Allows to use Yubikey NFC for storing OTP secrets
+Allows to use Yubikey for storing OTP secrets
 
 %if "%{?vendor}" == "chum"
 Categories:

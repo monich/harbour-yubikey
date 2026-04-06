@@ -419,14 +419,24 @@
         <translation>Kunde inte spara en eller flera tokens (%1)</translation>
     </message>
     <message id="yubikey-item-tap_to_delete">
-        <source>Tap YubiKey to delete this token</source>
+        <source>Insert or tap YubiKey to delete this token</source>
         <extracomment>List item text</extracomment>
-        <translation type="unfinished">Håll telefonen mot YubiKey för att ta bort denna token</translation>
+        <translation type="unfinished">Sätt i eller tryck på YubiKey för att ta bort denna token</translation>
+    </message>
+    <message id="yubikey-item-insert_to_delete">
+        <source>Insert YubiKey to delete this token</source>
+        <extracomment>List item text</extracomment>
+        <translation type="unfinished">Sätt in YubiKey för att ta bort denna token</translation>
     </message>
     <message id="yubikey-item-tap_to_rename">
-        <source>Tap YubiKey to rename this token</source>
+        <source>Insert or tap YubiKey to rename this token</source>
         <extracomment>List item text</extracomment>
-        <translation type="unfinished">Håll telefonen mot YubiKey för att byta namn på denna token</translation>
+        <translation type="unfinished">Sätt i eller tryck på YubiKey för att byta namn på denna token</translation>
+    </message>
+    <message id="yubikey-item-insert_to_rename">
+        <source>Insert YubiKey to rename this token</source>
+        <extracomment>List item text</extracomment>
+        <translation type="unfinished">Sätt in YubiKey för att byta namn på denna token</translation>
     </message>
     <message id="yubikey-item-touch_to_refresh">
         <source>Touch YubiKey button to refresh</source>
@@ -434,9 +444,14 @@
         <translation type="unfinished">Tryck på YubiKey-knappen för att uppdatera</translation>
     </message>
     <message id="yubikey-item-tap_to_refresh">
-        <source>Tap YubiKey to refresh</source>
+        <source>Insert or tap YubiKey to refresh</source>
         <extracomment>List item text</extracomment>
-        <translation type="unfinished">Håll telefonen mot YubiKey för att uppdatera</translation>
+        <translation type="unfinished">Sätt i eller tryck på YubiKey för att uppdatera</translation>
+    </message>
+    <message id="yubikey-item-insert_to_refresh">
+        <source>Insert YubiKey to refresh</source>
+        <extracomment>List item text</extracomment>
+        <translation type="unfinished">Sätt in YubiKey för att uppdatera</translation>
     </message>
     <message id="yubikey-settings-version">
         <source>Version %1</source>

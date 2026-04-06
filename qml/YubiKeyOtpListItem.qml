@@ -91,18 +91,30 @@ ListItem {
                 //: List item text (for USB key)
                 //% "Touch YubiKey button to refresh"
                 qsTrId("yubikey-item-touch_to_refresh") :
-                _markedForDeletion ?
-                //: List item text
-                //% "Tap YubiKey to delete this token"
-                qsTrId("yubikey-item-tap_to_delete") :
-                _markedForRename ?
-                //: List item text
-                //% "Tap YubiKey to rename this token"
-                qsTrId("yubikey-item-tap_to_rename") :
-                _markedForRefresh ?
-                //: List item text
-                //% "Tap YubiKey to refresh"
-                qsTrId("yubikey-item-tap_to_refresh") :
+                _markedForDeletion ? (
+                    NfcSystem.enabled ?
+                    //: List item text
+                    //% "Insert or tap YubiKey to delete this token"
+                    qsTrId("yubikey-item-tap_to_delete") :
+                    //: List item text
+                    //% "Insert YubiKey to delete this token"
+                    qsTrId("yubikey-item-insert_to_delete")) :
+                _markedForRename ? (
+                    NfcSystem.enabled ?
+                    //: List item text
+                    //% "Insert or tap YubiKey to rename this token"
+                    qsTrId("yubikey-item-tap_to_rename") :
+                    //: List item text
+                    //% "Insert YubiKey to rename this token"
+                    qsTrId("yubikey-item-insert_to_rename")) :
+                _markedForRefresh ? (
+                    NfcSystem.enabled ?
+                    //: List item text
+                    //% "Insert or tap YubiKey to refresh"
+                    qsTrId("yubikey-item-tap_to_refresh") :
+                    //: List item text
+                    //% "Insert YubiKey to refresh"
+                    qsTrId("yubikey-item-insert_to_refresh")) :
                 steam ? "Steam" :
                 type === YubiKey.TypeTOTP ? "TOTP" :
                 type === YubiKey.TypeHOTP ? "HOTP" :

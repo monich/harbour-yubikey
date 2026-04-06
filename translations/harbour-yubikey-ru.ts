@@ -419,14 +419,24 @@
         <translation>Один или несколько кодов сохранить не удалось (%1)</translation>
     </message>
     <message id="yubikey-item-tap_to_delete">
-        <source>Tap YubiKey to delete this token</source>
+        <source>Insert or tap YubiKey to delete this token</source>
         <extracomment>List item text</extracomment>
-        <translation>Поднесите YubiKey для удаления</translation>
+        <translation>Поднесите или подсоедините YubiKey для удаления</translation>
+    </message>
+    <message id="yubikey-item-insert_to_delete">
+        <source>Insert YubiKey to delete this token</source>
+        <extracomment>List item text</extracomment>
+        <translation>Подсоедините YubiKey для удаления</translation>
     </message>
     <message id="yubikey-item-tap_to_rename">
-        <source>Tap YubiKey to rename this token</source>
+        <source>Insert or tap YubiKey to rename this token</source>
         <extracomment>List item text</extracomment>
-        <translation>Поднесите YubiKey для переименования</translation>
+        <translation>Поднесите или подсоедините YubiKey для переименования</translation>
+    </message>
+    <message id="yubikey-item-insert_to_rename">
+        <source>Insert YubiKey to rename this token</source>
+        <extracomment>List item text</extracomment>
+        <translation>Подсоедините YubiKey для переименования</translation>
     </message>
     <message id="yubikey-item-touch_to_refresh">
         <source>Touch YubiKey button to refresh</source>
@@ -434,9 +444,14 @@
         <translation>Прикоснитесь к YubiKey для генерации нового пароля</translation>
     </message>
     <message id="yubikey-item-tap_to_refresh">
-        <source>Tap YubiKey to refresh</source>
+        <source>Insert or tap YubiKey to refresh</source>
         <extracomment>List item text</extracomment>
-        <translation>Поднесите YubiKey для генерации нового пароля</translation>
+        <translation>Поднесите или подсоедините YubiKey для генерации нового пароля</translation>
+    </message>
+    <message id="yubikey-item-insert_to_refresh">
+        <source>Insert YubiKey to refresh</source>
+        <extracomment>List item text</extracomment>
+        <translation>Подсоедините YubiKey для генерации нового пароля</translation>
     </message>
     <message id="yubikey-settings-version">
         <source>Version %1</source>

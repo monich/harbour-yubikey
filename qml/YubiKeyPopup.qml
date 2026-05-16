@@ -1,6 +1,8 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
 
+import "constants.js" as Constants
+
 DockedPanel {
     id: thisItem
 
@@ -51,11 +53,11 @@ DockedPanel {
         y: _padding
         width: parent.width - 2 * x
         height: Math.max(icon.height, label.height) + 2 * icon.y
-        radius: ('topLeftCorner' in Screen) ? Screen.topLeftCorner.radius : Theme.paddingMedium
+        radius: Constants.cornerRadius
         color: Theme.overlayBackgroundColor
         border {
             color: Theme.secondaryHighlightColor
-            width: Math.max(2, Math.floor(Theme.paddingSmall/3))
+            width: Constants.thinBorder
         }
 
         MouseArea {

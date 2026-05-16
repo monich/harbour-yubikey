@@ -2,6 +2,8 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import harbour.yubikey 1.0
 
+import "constants.js" as Constants
+
 SilicaFlickable {
     id: thisItem
 
@@ -45,7 +47,7 @@ SilicaFlickable {
         Rectangle {
             id: authDataViewContainer
 
-            readonly property int _borderWidth: Math.max(2, Math.floor(Theme.paddingSmall/3))
+            readonly property int _borderWidth: Constants.thinBorder
             readonly property color _borderColor: Theme.rgba(Theme.highlightColor, 0.4)
 
             x: Theme.horizontalPageMargin

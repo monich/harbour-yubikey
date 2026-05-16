@@ -46,6 +46,7 @@ OTHER_FILES += \
     harbour.yubikey.conf \
     _harbour-yubikey.conf \
     *.desktop \
+    qml/*.js \
     qml/*.qml \
     qml/images/*.svg \
     qml/components/*.js \

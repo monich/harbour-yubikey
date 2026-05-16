@@ -3,6 +3,7 @@ import Sailfish.Silica 1.0
 import org.nemomobile.notifications 1.0
 import harbour.yubikey 1.0
 
+import "constants.js" as Constants
 import "harbour"
 
 Page {
@@ -766,6 +767,7 @@ Page {
             changes: [
                 PropertyChanges {
                     target: yubiKeyIconContainer
+                    y : Constants.topNotchHeight/2 // Full topNotchHeight feels too much
                     width: parent.width
                     height: Math.max(Math.min(yubiKeyIconContainer.maxHeight, _fullHeight - contentFlickable.contentHeight), yubiKeyIconContainer.minHeight)
                 },
@@ -788,6 +790,7 @@ Page {
             changes: [
                 PropertyChanges {
                     target: yubiKeyIconContainer
+                    y : 0
                     width: yubiKeyIcon.width + 2 * Theme.itemSizeLarge
                     height: _fullHeight
                 },

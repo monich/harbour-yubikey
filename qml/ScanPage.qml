@@ -6,6 +6,7 @@ import org.nemomobile.notifications 1.0
 import org.nemomobile.policy 1.0
 import harbour.yubikey 1.0
 
+import "constants.js" as Constants
 import "harbour"
 
 Page {
@@ -157,6 +158,7 @@ Page {
     InfoLabel {
         id: titleLabel
 
+        y: Constants.topNotchHeight
         height: isPortrait ? Theme.itemSizeLarge : Theme.itemSizeSmall
         font.pixelSize: isPortrait ? Theme.fontSizeExtraLarge : Theme.fontSizeLarge
         minimumPixelSize: Theme.fontSizeSmall

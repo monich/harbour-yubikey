@@ -1,6 +1,6 @@
 Name:           harbour-yubikey
 Summary:        YubiKey OTP app
-Version:        1.2.3
+Version:        1.2.4
 Release:        1
 License:        BSD
 URL:            https://github.com/monich/harbour-yubikey

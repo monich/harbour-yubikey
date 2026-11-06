@@ -48,6 +48,8 @@
 #include "HarbourDebug.h"
 #include "HarbourUtil.h"
 
+#include <string.h>
+
 // ==========================================================================
 // YubiKeyNfcIo::Lock declaration
 // ==========================================================================
@@ -340,9 +342,9 @@ bool
 YubiKeyNfcIo::Private::isYubiKeyHB(
     const GUtilData* aHb)
 {
-    static const GUtilData yubiKeySuffix = { (const guint8*) "YubiKey", 7 };
-
-    if (gutil_data_has_suffix(aHb, &yubiKeySuffix)) {
+    // YubiKey-NEO spells its name as YubikeyNEO (lower case k)
+    if (memmem(aHb->bytes, aHb->size, "YubiKey", 7) ||
+        memmem(aHb->bytes, aHb->size, "Yubikey", 7)) {
         HDEBUG("This is a YubiKey based on HB");
         return true;
     }

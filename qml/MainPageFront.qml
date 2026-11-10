@@ -2,6 +2,7 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import harbour.yubikey 1.0
 
+import "constants.js" as Constants
 import "harbour"
 
 Item {
@@ -20,8 +21,10 @@ Item {
     YubiKeyImage {
         id: image
 
+        y: landscape  ? 0 : Constants.topNotchHeight
+        x: landscape ? 0 : (thisItem.width - width)/2
         width: height
-        height: Screen.width
+        height: Math.min(Screen.width, Math.round(Screen.height*2/3))
         opacity: label.opacity
     }
 

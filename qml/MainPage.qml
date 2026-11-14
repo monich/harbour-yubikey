@@ -159,6 +159,8 @@ Page {
 
         property bool flipped
 
+        Component.onCompleted: frontPanel.forceActiveFocus()
+
         front: MainPageFront {
             id: frontPanel
 
@@ -195,6 +197,7 @@ Page {
             }
             onFlip: {
                 frontPanel.showSettingsButton()
+                frontPanel.forceActiveFocus()
                 _unflip(false)
             }
         }

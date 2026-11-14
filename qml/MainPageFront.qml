@@ -59,6 +59,8 @@ Item {
         onClicked: showSettingsButton()
     }
 
+    Keys.onPressed: showSettingsButton()
+
     HarbourIconButton {
         anchors {
             bottom: parent.bottom

@@ -278,7 +278,7 @@ SOURCES += \
 
 HARBOUR_QML_COMPONENTS = \
     $${HARBOUR_LIB_QML}/HarbourHighlightIcon.qml \
-    $${HARBOUR_LIB_QML}/HarbourIconTextButton.qml \
+    $${HARBOUR_LIB_QML}/HarbourIconButton.qml \
     $${HARBOUR_LIB_QML}/HarbourMarqueeText.qml \
     $${HARBOUR_LIB_QML}/HarbourPasswordInputField.qml \
     $${HARBOUR_LIB_QML}/HarbourTextFlip.qml

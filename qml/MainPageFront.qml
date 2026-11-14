@@ -59,7 +59,7 @@ Item {
         onClicked: showSettingsButton()
     }
 
-    HarbourIconTextButton {
+    HarbourIconButton {
         anchors {
             bottom: parent.bottom
             right: parent.right
@@ -68,6 +68,7 @@ Item {
         iconSource: "images/settings.svg"
         opacity: showButtonTimer.running ? 1 : 0
         visible: opacity > 0
+
         onClicked: {
             showButtonTimer.stop()
             thisItem.flip()

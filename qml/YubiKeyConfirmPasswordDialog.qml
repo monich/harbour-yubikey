@@ -12,7 +12,7 @@ Dialog {
 
     canAccept: passwordField.text.length > 0 && passwordField.text === password
 
-    readonly property int _fullHeight: isPortrait ? Screen.height : Screen.width
+    readonly property int _fullHeight: isPortrait ? (pageContainer ? pageContainer.height : Screen.height) : Screen.width
     readonly property real _landscapeWidth: Screen.height - (('topCutout' in Screen) ? Screen.topCutout.height : 0)
 
     onStatusChanged: {

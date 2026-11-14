@@ -155,7 +155,7 @@ Page {
         id: flipable
 
         width: parent.width
-        height: isPortrait ? Screen.height : Screen.width
+        height: isPortrait ? (pageContainer ? pageContainer.height : Screen.height) : Screen.width
 
         property bool flipped
 

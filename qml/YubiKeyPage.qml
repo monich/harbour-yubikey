@@ -24,7 +24,7 @@ Page {
     showNavigationIndicator: false
 
     property bool _resetPopupShown
-    readonly property int _fullHeight: isPortrait ? Screen.height : Screen.width
+    readonly property int _fullHeight: isPortrait ? (pageContainer ? pageContainer.height : Screen.height) : Screen.width
     readonly property bool _authorized: yubiKey.authAccess === YubiKey.AccessOpen ||
         yubiKey.authAccess === YubiKey.AccessGranted
 

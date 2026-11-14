@@ -14,7 +14,7 @@ Dialog {
 
     property bool _invalidPassword
     property bool _yubiKeyPresent: yubiKey.present
-    readonly property int _screenHeight: isLandscape ? Screen.width : Screen.height
+    readonly property int _fullHeight: isPortrait ? (pageContainer ? pageContainer.height : Screen.height) : Screen.width
     readonly property bool _darkOnLight : "colorScheme" in Theme && Theme.colorScheme === Theme.DarkOnLight
     readonly property real _landscapeWidth: Screen.height - (('topCutout' in Screen) ? Screen.topCutout.height : 0)
 
@@ -121,7 +121,7 @@ Dialog {
     Column {
         id: inputContainer
 
-        readonly property int _ymax1: _screenHeight/2 - passwordField._backgroundRuleTopOffset - passwordField.y
+        readonly property int _ymax1: _fullHeight/2 - passwordField._backgroundRuleTopOffset - passwordField.y
         readonly property int _ymax2: thisDialog.height - passwordField.height - passwordField.y
 
         y: Math.min(_ymax1, _ymax2)

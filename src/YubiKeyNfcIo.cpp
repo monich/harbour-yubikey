@@ -88,6 +88,7 @@ public:
     static void tagEvent(NfcTagClient*, NFC_TAG_PROPERTY, void*);
     static void isoDepValidEvent(NfcIsoDepClient*, NFC_ISODEP_PROPERTY, void*);
 
+    void txDeactivated();
     void setState(IoState);
     void emitQueuedSignals();
 
@@ -196,11 +197,22 @@ YubiKeyNfcIo::Private::setState(
     }
 }
 
+void
+YubiKeyNfcIo::Private::txDeactivated()
+{
+    HASSERT(iActiveTx > 0);
+    iActiveTx--;
+    if (!iActiveTx && iState == IoActive) {
+        setState(iLock ? IoLocked : IoReady);
+    }
+}
+
 YubiKeyIo::IoLock
 YubiKeyNfcIo::Private::requestLock()
 {
     if (!iLock && !isTerminalState(iState)) {
         NfcTagClientLock* lock = nfc_tag_client_get_lock(iTag);
+
         if (lock) {
             iLock = new Lock(this, lock);
             setState(IoLocked);
@@ -483,7 +495,15 @@ YubiKeyNfcIo::Tx::Tx(
 
 YubiKeyNfcIo::Tx::~Tx()
 {
-    deactivate(false);
+    if (iActive) {
+        // nfcIo() returns null if YubiKeyNfcIo is being deleted
+        // (and tx is being deleted with it)
+        YubiKeyNfcIo* io = nfcIo();
+
+        if (io) {
+            io->iPrivate->txDeactivated();
+        }
+    }
     g_signal_handler_disconnect(iCancel, iCancelId);
     g_cancellable_cancel(iCancel);
     g_object_unref(iCancel);
@@ -539,14 +559,8 @@ YubiKeyNfcIo::Tx::deactivate(
     bool aMayDelete)
 {
     if (iActive) {
-        YubiKeyNfcIo::Private* priv = nfcIo()->iPrivate;
-
         iActive = false;
-        HASSERT(priv->iActiveTx > 0);
-        priv->iActiveTx--;
-        if (!priv->iActiveTx && priv->iState == IoActive) {
-            priv->setState(priv->iLock ? IoLocked : IoReady);
-        }
+        nfcIo()->iPrivate->txDeactivated();
         if (aMayDelete && iAutoDelete) {
             HarbourUtil::scheduleDeleteLater(this);
         }

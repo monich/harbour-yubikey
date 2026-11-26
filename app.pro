@@ -277,6 +277,7 @@ SOURCES += \
     $${HARBOUR_LIB_SRC}/HarbourUtil.cpp
 
 HARBOUR_QML_COMPONENTS = \
+    $${HARBOUR_LIB_QML}/HarbourHighlightEffect.qml \
     $${HARBOUR_LIB_QML}/HarbourHighlightIcon.qml \
     $${HARBOUR_LIB_QML}/HarbourIconButton.qml \
     $${HARBOUR_LIB_QML}/HarbourMarqueeText.qml \
